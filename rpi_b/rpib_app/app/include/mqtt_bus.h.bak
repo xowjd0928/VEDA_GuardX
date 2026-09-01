@@ -1,0 +1,41 @@
+#ifndef MQTT_BUS_H
+#define MQTT_BUS_H
+
+#include "guardx_err.h"
+#include "guardx_protocol.h"   /* 공통 토픽/QoS 정의 (common/include/) */
+
+/*
+ * MQTT 양방향 wrapper (libmosquitto 기반).
+ *
+ * RPi B의 엔진은 두 독립 구간의 접점이다:
+ *   입력 구간: guardx/sensor/rpia(+/button) 구독   <- A->B 구간의 종점
+ *   출력 구간: guardx/actuator/rpic 발행           <- B->C 구간의 시발점
+ * 하나의 클라이언트(client id "rpib")가 둘 다 담당한다.
+ *
+ * 토픽 문자열은 guardx_protocol.h 포맷 매크로로 런타임 조립 (A/C와
+ * 동일 패턴).
+ */
+
+/* 브로커 접속 정보.
+ * 브로커가 같은 기기(RPi B)에서 돌므로 localhost 고정이 정상이다 -
+ * A/C처럼 IP를 바꿀 일이 없다. mTLS 전환 후에도 로컬 루프백은 평문
+ * 1883을 유지하는 구성이 가능(brokers conf에서 리스너 분리)하므로
+ * TLS 기본값 0. 외부 리스너만 mTLS로 잠그는 걸 권장. */
+#define MQTT_USE_TLS        0
+#define MQTT_BROKER_HOST    "localhost"
+#define MQTT_BROKER_PORT    (MQTT_USE_TLS ? 8883 : 1883)
+#define MQTT_TLS_CA_PATH    "/etc/guardx/certs/ca.crt"
+#define MQTT_TLS_CERT_PATH  "/etc/guardx/certs/rpib.crt"
+#define MQTT_TLS_KEY_PATH   "/etc/guardx/certs/rpib.key"
+
+/* 수신 콜백 2종. payload는 NUL 종료 보장 안 됨 - len 기준으로 다룰 것.
+ * mosquitto 내부 네트워크 스레드에서 호출된다. */
+typedef void (*mqtt_sensor_handler_t)(const char *payload, int len);
+typedef void (*mqtt_button_handler_t)(const char *payload, int len);
+
+guardx_err_t mqtt_bus_init(mqtt_sensor_handler_t on_sensor,
+                           mqtt_button_handler_t on_button);
+guardx_err_t mqtt_bus_publish_actuator(const char *json, int len); /* GUARDX_QOS_ACTUATOR */
+void         mqtt_bus_cleanup(void);
+
+#endif /* MQTT_BUS_H */

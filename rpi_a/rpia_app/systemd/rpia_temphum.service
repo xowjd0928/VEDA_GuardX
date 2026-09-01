@@ -1,0 +1,13 @@
+[Unit]
+Description=GuardX RPi A - rpia_temphum kernel module (SHT30, I2C)
+DefaultDependencies=no
+Before=rpia_publisher.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/insmod /opt/guardx/rpia/drivers/rpia_temphum.ko
+ExecStop=/sbin/rmmod rpia_temphum
+
+[Install]
+WantedBy=multi-user.target

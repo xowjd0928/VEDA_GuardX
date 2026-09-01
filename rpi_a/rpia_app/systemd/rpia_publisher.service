@@ -1,0 +1,17 @@
+[Unit]
+Description=GuardX RPi A - sensor publisher (App layer)
+# 4개 드라이버 모듈이 모두 로드된 후에 시작
+After=rpia_adc.service rpia_temphum.service rpia_irtemp.service rpia_button.service network-online.target
+Requires=rpia_adc.service rpia_temphum.service rpia_irtemp.service rpia_button.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/guardx/rpia/app/rpia_publisher
+Restart=on-failure
+RestartSec=3
+# MQTT 브로커(RPi B)가 아직 안 올라와 있어도 mosquitto_loop_start가
+# 내부에서 재접속을 시도하므로 여기서 대기 로직은 두지 않음
+
+[Install]
+WantedBy=multi-user.target

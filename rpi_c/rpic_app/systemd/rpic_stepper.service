@@ -1,0 +1,14 @@
+[Unit]
+Description=GuardX RPi C - rpic_stepper kernel module (28BYJ-48 stepper)
+# 컨벤션: 노드별 독립 유닛, Type=oneshot
+DefaultDependencies=no
+Before=rpic_subscriber.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/insmod /opt/guardx/rpic/drivers/rpic_stepper.ko
+ExecStop=/sbin/rmmod rpic_stepper
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=GuardX RPi A - rpia_irtemp kernel module (MLX90614, I2C)
+DefaultDependencies=no
+Before=rpia_publisher.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/insmod /opt/guardx/rpia/drivers/rpia_irtemp.ko
+ExecStop=/sbin/rmmod rpia_irtemp
+
+[Install]
+WantedBy=multi-user.target

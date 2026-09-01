@@ -1,0 +1,24 @@
+[Unit]
+Description=GuardX RPi B - VMS query service (DB <-> MQTT)
+# 카메라 폴러(guardx-poller)와는 의존 관계가 없다 — 그게 분리한 이유다.
+# Postgres·브로커가 늦게 떠도 Requires는 걸지 않는다: DB는 runMqttService가
+# 5초 간격으로 재연결하고, 브로커는 mosquitto_loop_start가 재접속한다.
+After=postgresql.service mosquitto.service network-online.target
+Wants=postgresql.service mosquitto.service network-online.target
+
+[Service]
+Type=simple
+# ⚠ 필수 — Config::load()가 config.env를 상대경로로 읽는다. 없으면 PGCONN이
+# 기본값(비밀번호 없음)으로 떨어져 DB 인증이 실패한다.
+WorkingDirectory=/home/juan/7th_VEDA_GROUP2/rpi_b
+# ⚠ stdbuf -oL 필수 (guardx-poller 와 같은 이유). stdout 이 journald 파이프면
+# glibc 가 전(full) 버퍼링을 걸어, std::cout 로 찍는 "[mqttd] 시작",
+# "DB 연결됨", "zones 발행" 이 4KB 찰 때까지 저널에 안 나온다. 서비스는
+# 멀쩡한데 로그만 침묵해서 "안 도는 것"으로 오진하기 딱 좋다 (2026-08-03 실제
+# 로 겪음 — std::cerr 는 무버퍼라 오류만 보이는 것이 오해를 더 키웠다).
+ExecStart=/usr/bin/stdbuf -oL /home/juan/7th_VEDA_GROUP2/rpi_b/build/guardx_mqttd
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

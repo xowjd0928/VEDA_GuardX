@@ -1,0 +1,97 @@
+/*
+ * db_writer.c - JSON Lines 파일 기반 DB 스텁
+ *
+ * >>> PostgreSQL 교체 지점 <<<
+ * ERD 확정 후 이 파일만 libpq 구현으로 바꾼다. 헤더 인터페이스와
+ * main.c 호출부는 그대로 유지할 것.
+ *
+ * fopen을 append 모드로 유지하고 매 기록 후 fflush - 프로세스가
+ * 죽어도 마지막 기록까지 남도록. (fsync까지는 안 한다 - 1Hz 기록에
+ * SD카드 수명을 갈아넣을 이유가 없음. 전원단 유실 허용은 프로토타입
+ * 수준에서 감수)
+ */
+
+#include <stdio.h>
+
+#include "db_writer.h"
+
+static FILE *fp;
+
+guardx_err_t db_writer_open(void)
+{
+    if (fp)
+        return GUARDX_OK;
+    fp = fopen(DB_WRITER_PATH, "a");
+    if (!fp) {
+        perror(DB_WRITER_PATH " open");
+        return GUARDX_ERR_OPEN;
+    }
+    return GUARDX_OK;
+}
+
+void db_writer_close(void)
+{
+    if (fp) {
+        fclose(fp);
+        fp = NULL;
+    }
+}
+
+static guardx_err_t write_line_end(int n)
+{
+    if (n < 0) {
+        fprintf(stderr, "db: write failed\n");
+        return GUARDX_ERR_WRITE;
+    }
+    fputc('\n', fp);
+    fflush(fp);
+    return GUARDX_OK;
+}
+
+guardx_err_t db_write_sensor(const sensor_msg_t *msg, uint64_t timestamp_ms)
+{
+    int n;
+
+    if (!fp || !msg)
+        return GUARDX_ERR_NOT_OPEN;
+
+    n = fprintf(fp,
+        "{\"type\":\"sensor\",\"ts\":%llu,\"sensor_seq\":%u,"
+        "\"gas_ppm\":%d,\"temperature\":%.1f,\"humidity\":%.1f,"
+        "\"spark\":%d,\"valid\":{\"gas\":%s,\"temphum\":%s,\"spark\":%s}}",
+        (unsigned long long)timestamp_ms, msg->seq,
+        msg->gas_ppm, msg->temperature, msg->humidity, msg->spark_detected,
+        msg->gas_valid ? "true" : "false",
+        msg->temphum_valid ? "true" : "false",
+        msg->spark_valid ? "true" : "false");
+    return write_line_end(n);
+}
+
+guardx_err_t db_write_button(const button_msg_t *msg, uint64_t timestamp_ms)
+{
+    int n;
+
+    if (!fp || !msg)
+        return GUARDX_ERR_NOT_OPEN;
+
+    n = fprintf(fp,
+        "{\"type\":\"button\",\"ts\":%llu,\"sensor_seq\":%u,\"press_count\":%u}",
+        (unsigned long long)timestamp_ms, msg->seq, msg->press_count);
+    return write_line_end(n);
+}
+
+guardx_err_t db_write_transition(decision_event_t ev, decision_cause_t cause,
+                                 uint32_t trigger_seq, uint64_t timestamp_ms)
+{
+    int n;
+
+    if (!fp)
+        return GUARDX_ERR_NOT_OPEN;
+
+    n = fprintf(fp,
+        "{\"type\":\"%s\",\"ts\":%llu,\"cause\":\"%s\",\"trigger_seq\":%u}",
+        (ev == DECISION_EVENT_FIRE) ? "fire_confirmed" : "recovered",
+        (unsigned long long)timestamp_ms,
+        DECISION_CAUSE_STR(cause), trigger_seq);
+    return write_line_end(n);
+}

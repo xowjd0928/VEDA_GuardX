@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>GuardX VMS — Control Room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    html,body{margin:0;padding:0;background:#07090D;}
+    a{color:#4EA1FF;text-decoration:none;}
+    a:hover{color:#7DBBFF;text-decoration:underline;}
+    @keyframes gx-blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+    @keyframes gx-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,74,54,.55)}50%{box-shadow:0 0 0 7px rgba(255,74,54,0)}}
+    @keyframes gx-toast{from{transform:translateX(24px);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes gx-stripe{from{background-position:0 0}to{background-position:56px 0}}
+    @keyframes gx-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+    ::-webkit-scrollbar{width:8px;height:8px}
+    ::-webkit-scrollbar-thumb{background:#232B38;border-radius:4px}
+    ::-webkit-scrollbar-track{background:transparent}
+  </style>
+</helmet>
+
+<div style="width:1920px;height:1080px;display:flex;flex-direction:column;background:#0A0D12;color:#E2E8F2;font-family:'IBM Plex Sans',sans-serif;overflow:hidden;position:relative;user-select:none">
+
+  <!-- ══════════ TOP BAR ══════════ -->
+  <div style="height:52px;flex:none;display:flex;align-items:center;gap:20px;padding:0 20px;background:#0D1118;border-bottom:1px solid #1C2330">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:26px;height:26px;background:{{ accent }};display:grid;place-items:center;font-weight:700;font-size:15px;color:#0A0D12;border-radius:2px">G</div>
+      <div style="font-weight:700;font-size:16px;letter-spacing:.14em">GUARDX <span style="color:#5A6577;font-weight:500;font-size:12px;letter-spacing:.08em">VMS 1.0</span></div>
+    </div>
+    <div style="width:1px;height:22px;background:#1C2330"></div>
+    <div style="font-size:12px;color:#8B96A8;letter-spacing:.06em">SITE <span style="color:#E2E8F2;font-weight:600">TERMINAL WEST · SECTOR B</span></div>
+    <div style="display:flex;gap:8px;margin-left:8px">
+      <sc-for list="{{ statusPills }}" as="p" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:6px;height:24px;padding:0 10px;background:#12161F;border:1px solid #1C2330;border-radius:2px;font-size:11px;color:#8B96A8;font-family:'IBM Plex Mono',monospace">
+          <span style="width:6px;height:6px;border-radius:50%;background:{{ p.dot }}"></span>{{ p.label }}
+        </div>
+      </sc-for>
+    </div>
+    <div style="flex:1"></div>
+    <sc-if value="{{ alarmActive }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ openDisaster }}" style="display:flex;align-items:center;gap:8px;height:30px;padding:0 14px;background:{{ accent }};border:none;border-radius:2px;color:#0A0D12;font-weight:700;font-size:12px;letter-spacing:.1em;cursor:pointer;animation:gx-pulse 1.4s infinite;font-family:'IBM Plex Sans',sans-serif">FIRE ALARM · SECTOR B</button>
+    </sc-if>
+    <button onClick="{{ startDrill }}" style-hover="border-color:#3A4557;color:#E2E8F2" style="height:30px;padding:0 14px;background:transparent;border:1px solid #232B38;border-radius:2px;color:#8B96A8;font-weight:600;font-size:11px;letter-spacing:.1em;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">SIMULATE FIRE EVENT</button>
+    <div style="text-align:right;font-family:'IBM Plex Mono',monospace;line-height:1.25">
+      <div style="font-size:15px;font-weight:600">{{ clockKST }} <span style="font-size:10px;color:#5A6577">KST</span></div>
+      <div style="font-size:10px;color:#5A6577">{{ clockUTC }} UTC</div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+
+    <!-- ══════════ NAV RAIL ══════════ -->
+    <div style="width:74px;flex:none;background:#0D1118;border-right:1px solid #1C2330;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+        <button onClick="{{ n.go }}" style-hover="color:#E2E8F2" style="width:62px;height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;background:{{ n.bg }};border:none;border-left:2px solid {{ n.edge }};border-radius:2px;color:{{ n.color }};cursor:pointer;font-family:'IBM Plex Sans',sans-serif">
+          <span style="font-size:17px;line-height:1">{{ n.icon }}</span>
+          <span style="font-size:8.5px;font-weight:600;letter-spacing:.12em">{{ n.label }}</span>
+        </button>
+      </sc-for>
+      <div style="flex:1"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3A4557;letter-spacing:.1em;writing-mode:vertical-rl;padding-bottom:8px">BIG EYES · GUARDX</div>
+    </div>
+
+    <!-- ══════════ MAIN AREA ══════════ -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0">
+
+      <!-- ────── LIVE ────── -->
+      <sc-if value="{{ isLive }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Live Monitoring" style="flex:1;display:flex;flex-direction:column;min-height:0;padding:12px 14px 0">
+          <div style="height:34px;flex:none;display:flex;align-items:center;gap:14px;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.14em;color:#E2E8F2">LIVE MONITORING</div>
+            <div style="font-size:11px;color:#5A6577;font-family:'IBM Plex Mono',monospace">RTSP ×4 · GStreamer · H.265 · host-pc decode</div>
+            <div style="flex:1"></div>
+            <div style="font-size:10px;color:#5A6577;letter-spacing:.1em;margin-right:2px">WALL LAYOUT</div>
+            <div style="display:flex;background:#12161F;border:1px solid #1C2330;border-radius:2px;padding:2px;gap:2px">
+              <sc-for list="{{ layoutBtns }}" as="lb" hint-placeholder-count="3">
+                <button onClick="{{ lb.set }}" style="height:24px;padding:0 12px;background:{{ lb.bg }};border:none;border-radius:1px;color:{{ lb.color }};font-size:10.5px;font-weight:600;letter-spacing:.1em;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">{{ lb.label }}</button>
+              </sc-for>
+            </div>
+            <label style="display:flex;align-items:center;gap:7px;font-size:10.5px;color:#8B96A8;letter-spacing:.06em;cursor:pointer;margin-left:6px">
+              <button onClick="{{ toggleOverlay }}" style="width:28px;height:16px;border-radius:8px;border:1px solid #232B38;background:{{ overlayTrackBg }};position:relative;cursor:pointer;padding:0">
+                <span style="position:absolute;top:2px;left:{{ overlayKnobLeft }};width:10px;height:10px;border-radius:50%;background:#E2E8F2;transition:left .15s"></span>
+              </button>
+              AI OVERLAY
+            </label>
+          </div>
+
+          <div style="flex:1;min-height:0;display:grid;gap:8px;grid-template-columns:{{ gridCols }};grid-template-rows:{{ gridRows }}">
+            <sc-for list="{{ liveChannels }}" as="ch" hint-placeholder-count="4">
+              <div onClick="{{ ch.focus }}" style="position:relative;overflow:hidden;border:1px solid {{ ch.border }};border-radius:2px;background:{{ ch.bg }};grid-area:{{ ch.area }};cursor:pointer;min-height:0">
+                <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px);pointer-events:none"></div>
+                <div style="position:absolute;inset:0;box-shadow:inset 0 0 120px rgba(0,0,0,.75);pointer-events:none"></div>
+                <sc-if value="{{ overlayOn }}" hint-placeholder-val="{{ true }}">
+                  <sc-for list="{{ ch.dets }}" as="b" hint-placeholder-count="2">
+                    <div style="position:absolute;left:{{ b.x }}%;top:{{ b.y }}%;width:{{ b.w }}%;height:{{ b.h }}%;border:1.5px solid {{ b.stroke }};border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.4)">
+                      <div style="position:absolute;left:-1.5px;top:-18px;background:{{ b.stroke }};color:#0A0D12;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;padding:2px 5px;white-space:nowrap;border-radius:1px">{{ b.tag }}</div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+                <div style="position:absolute;top:8px;left:10px;display:flex;align-items:center;gap:8px">
+                  <span style="width:7px;height:7px;border-radius:50%;background:{{ accent }};animation:gx-blink 1.6s infinite"></span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9)">{{ ch.name }}</span>
+                </div>
+                <div style="position:absolute;top:8px;right:10px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:rgba(255,255,255,.55);text-shadow:0 1px 3px rgba(0,0,0,.9)">2592×1520 · 30FPS · H.265</div>
+                <div style="position:absolute;bottom:8px;left:10px;display:flex;gap:6px;align-items:center">
+                  <span style="background:rgba(10,13,18,.78);border:1px solid rgba(255,255,255,.12);border-radius:2px;padding:3px 8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#E2E8F2">OCC <b style="color:{{ ch.occColor }}">{{ ch.occ }}</b>/{{ ch.cap }}</span>
+                  <span style="background:rgba(10,13,18,.78);border:1px solid rgba(255,255,255,.12);border-radius:2px;padding:3px 8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8B96A8">{{ ch.flow }}</span>
+                </div>
+                <div style="position:absolute;bottom:8px;right:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(255,255,255,.6);text-shadow:0 1px 3px rgba(0,0,0,.9)">{{ osdStamp }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- bottom strip -->
+          <div style="height:172px;flex:none;display:flex;gap:10px;padding:10px 0 12px">
+            <div style="flex:1.6;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-width:0">
+              <div style="height:30px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid #161C25">
+                <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">EVENT TIMELINE</span>
+                <span style="font-size:9.5px;color:#3A4557;font-family:'IBM Plex Mono',monospace">poll /events · 1.0 s · pull</span>
+              </div>
+              <div style="flex:1;overflow-y:auto;padding:4px 0">
+                <sc-for list="{{ events }}" as="e" hint-placeholder-count="4">
+                  <div style-hover="background:#12161F" style="display:flex;align-items:center;gap:10px;padding:5px 12px;animation:gx-fade .25s">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5A6577;width:62px;flex:none">{{ e.time }}</span>
+                    <span style="width:58px;flex:none;text-align:center;font-size:9px;font-weight:700;letter-spacing:.08em;color:{{ e.sevColor }};border:1px solid {{ e.sevColor }};border-radius:2px;padding:2px 0">{{ e.sev }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8B96A8;width:46px;flex:none">{{ e.src }}</span>
+                    <span style="font-size:11.5px;color:#C6CEDB;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.msg }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column">
+              <div style="height:30px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid #161C25">
+                <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">ZONE OCCUPANCY · FORECAST +5 MIN</span>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:9px;padding:8px 14px">
+                <sc-for list="{{ occRows }}" as="o" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8B96A8;width:34px;flex:none">{{ o.ch }}</span>
+                    <div style="flex:1;height:8px;background:#12161F;border-radius:4px;position:relative;overflow:hidden">
+                      <div style="position:absolute;inset:0;width:{{ o.pct }}%;background:{{ o.color }};border-radius:4px;transition:width .6s"></div>
+                      <div style="position:absolute;top:-2px;bottom:-2px;left:{{ o.predPct }}%;width:2px;background:#E2E8F2;opacity:.7"></div>
+                    </div>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#C6CEDB;width:78px;flex:none;text-align:right">{{ o.txt }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ────── HEATMAP / CROWD ────── -->
+      <sc-if value="{{ isHeat }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Crowd Analytics" style="flex:1;display:flex;flex-direction:column;min-height:0;padding:12px 14px 12px">
+          <div style="height:34px;flex:none;display:flex;align-items:center;gap:14px;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.14em">CROWD ANALYTICS · CONGESTION FORECAST</div>
+            <div style="font-size:11px;color:#5A6577;font-family:'IBM Plex Mono',monospace">zone = channel · onboard juan_application · /prediction 15 s</div>
+            <div style="flex:1"></div>
+            <sc-if value="{{ heatWarn }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:8px;height:28px;padding:0 12px;border:1px solid #FFB224;border-radius:2px;color:#FFB224;font-size:11px;font-weight:600;letter-spacing:.06em">CH2 CONCOURSE A → {{ warnPct }}% predicted in 5 min · fan AUTO engaged</div>
+            </sc-if>
+          </div>
+          <div style="flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px">
+            <sc-for list="{{ heatChannels }}" as="h" hint-placeholder-count="4">
+              <div style="background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-height:0;overflow:hidden">
+                <div style="height:34px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid #161C25">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600">{{ h.name }}</span>
+                  <span style="font-size:10px;color:#5A6577">occupancy snapshot /metadata</span>
+                  <div style="flex:1"></div>
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:{{ h.loadColor }};border:1px solid {{ h.loadColor }};border-radius:2px;padding:2px 8px">LOAD {{ h.loadPct }}%</span>
+                </div>
+                <div style="flex:1;position:relative;min-height:0;background:{{ h.bg }}">
+                  <div style="position:absolute;inset:0;background:{{ h.heat }};mix-blend-mode:screen;pointer-events:none"></div>
+                  <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px)"></div>
+                  <div style="position:absolute;bottom:8px;left:10px;background:rgba(10,13,18,.8);border:1px solid rgba(255,255,255,.12);border-radius:2px;padding:3px 8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px">OCC <b>{{ h.occ }}</b> / cap {{ h.cap }}</div>
+                  <div style="position:absolute;bottom:8px;right:10px;background:rgba(10,13,18,.8);border:1px solid rgba(255,255,255,.12);border-radius:2px;padding:3px 8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8B96A8">{{ h.flow }}</div>
+                </div>
+                <div style="height:64px;flex:none;display:flex;align-items:center;gap:14px;padding:0 12px;border-top:1px solid #161C25">
+                  <svg viewBox="0 0 120 34" style="width:150px;height:38px;flex:none">
+                    <polyline points="{{ h.spark }}" fill="none" stroke="#4EA1FF" stroke-width="1.5"></polyline>
+                    <polyline points="{{ h.sparkPred }}" fill="none" stroke="{{ h.loadColor }}" stroke-width="1.5" stroke-dasharray="3 3"></polyline>
+                  </svg>
+                  <div style="font-size:9.5px;color:#5A6577;letter-spacing:.08em;line-height:1.5;flex:none">OCC 20 MIN<br>— PRED ┄</div>
+                  <div style="flex:1"></div>
+                  <sc-for list="{{ h.preds }}" as="p" hint-placeholder-count="3">
+                    <div style="text-align:center;min-width:56px">
+                      <div style="font-size:9px;color:#5A6577;letter-spacing:.1em">{{ p.hz }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:{{ p.color }}">{{ p.val }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ────── TRACKING ────── -->
+      <sc-if value="{{ isTrack }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Target Tracking" style="flex:1;display:flex;gap:12px;min-height:0;padding:12px 14px">
+          <div style="width:360px;flex:none;display:flex;flex-direction:column;gap:10px;min-height:0">
+            <div style="background:#0D1118;border:1px solid #1C2330;border-radius:2px;padding:14px">
+              <div style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8;margin-bottom:12px">ACTIVE TARGET</div>
+              <div style="display:flex;gap:12px">
+                <div style="width:96px;height:128px;flex:none;border:1px solid #232B38;border-radius:2px;background:repeating-linear-gradient(45deg,#12161F 0 8px,#0F131A 8px 16px);display:grid;place-items:center">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:#5A6577;text-align:center;line-height:1.5">BESTSHOT<br>rpi-b copy<br>(volatile src)</span>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">T-0412</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px">
+                    <span style="font-size:9.5px;font-family:'IBM Plex Mono',monospace;color:#C6CEDB;border:1px solid #232B38;border-radius:2px;padding:3px 7px">UPPER · BLACK · LONG</span>
+                    <span style="font-size:9.5px;font-family:'IBM Plex Mono',monospace;color:#C6CEDB;border:1px solid #232B38;border-radius:2px;padding:3px 7px">LOWER · GRAY · LONG</span>
+                  </div>
+                  <div style="font-size:10.5px;color:#8B96A8;line-height:1.6">First seen <span style="font-family:'IBM Plex Mono',monospace;color:#C6CEDB">14:02:11</span> · CH1<br>Status <span style="color:#2FD27D;font-weight:600">TRACKING</span> · CH3</div>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-height:0">
+              <div style="height:32px;flex:none;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #161C25;font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">HAND-OVER CHAIN</div>
+              <div style="flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:0">
+                <sc-for list="{{ handovers }}" as="hv" hint-placeholder-count="3">
+                  <div style="display:flex;gap:12px">
+                    <div style="width:14px;flex:none;display:flex;flex-direction:column;align-items:center">
+                      <span style="width:10px;height:10px;border-radius:50%;border:2px solid {{ hv.dotColor }};background:{{ hv.dotFill }};flex:none;margin-top:3px"></span>
+                      <sc-if value="{{ hv.line }}" hint-placeholder-val="{{ true }}"><span style="width:2px;flex:1;background:#232B38"></span></sc-if>
+                    </div>
+                    <div style="flex:1;padding-bottom:16px">
+                      <div style="display:flex;align-items:baseline;gap:8px">
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">{{ hv.ch }}</span>
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5A6577">{{ hv.span }}</span>
+                        <div style="flex:1"></div>
+                        <span style="font-size:9.5px;font-family:'IBM Plex Mono',monospace;color:{{ hv.confColor }}">{{ hv.conf }}</span>
+                      </div>
+                      <div style="font-size:10.5px;color:#8B96A8;margin-top:3px;line-height:1.5">{{ hv.note }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+                <div style="font-size:9.5px;color:#3A4557;line-height:1.6;border-top:1px solid #161C25;padding-top:10px">ObjectId is per-channel, non-persistent — chain is attribute + time-gap + direction matching. On match failure a new track is opened.</div>
+              </div>
+            </div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-height:0">
+            <div style="flex:1;position:relative;border:1px solid #1C2330;border-radius:2px;overflow:hidden;background:{{ trackBg }};min-height:0">
+              <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px)"></div>
+              <div style="position:absolute;inset:0;box-shadow:inset 0 0 140px rgba(0,0,0,.75)"></div>
+              <svg viewBox="0 0 100 56" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">
+                <polyline points="{{ trackPath }}" fill="none" stroke="#4EA1FF" stroke-width=".45" stroke-dasharray="1.4 .9" opacity=".9"></polyline>
+              </svg>
+              <sc-for list="{{ trackPts }}" as="tp" hint-placeholder-count="4">
+                <div style="position:absolute;left:{{ tp.x }}%;top:{{ tp.y }}%;transform:translate(-50%,-50%)">
+                  <span style="display:block;width:{{ tp.size }}px;height:{{ tp.size }}px;border-radius:50%;background:{{ tp.color }};box-shadow:0 0 0 2px rgba(10,13,18,.6)"></span>
+                  <span style="position:absolute;left:10px;top:-5px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#C6CEDB;text-shadow:0 1px 3px #000;white-space:nowrap">{{ tp.label }}</span>
+                </div>
+              </sc-for>
+              <div style="position:absolute;left:{{ curX }}%;top:{{ curY }}%;transform:translate(-50%,-50%);width:52px;height:96px;border:1.5px solid #2FD27D;border-radius:1px">
+                <div style="position:absolute;left:-1.5px;top:-18px;background:#2FD27D;color:#0A0D12;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;padding:2px 5px;white-space:nowrap">T-0412 · 0.87</div>
+              </div>
+              <div style="position:absolute;top:8px;left:10px;display:flex;align-items:center;gap:8px">
+                <span style="width:7px;height:7px;border-radius:50%;background:{{ accent }};animation:gx-blink 1.6s infinite"></span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#fff;text-shadow:0 1px 3px #000">CH3 · CORRIDOR B2 — LIVE PATH</span>
+              </div>
+              <div style="position:absolute;bottom:10px;left:10px;background:rgba(10,13,18,.8);border:1px solid rgba(255,255,255,.12);border-radius:2px;padding:5px 10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#C6CEDB">heading E → predicted exit <b style="color:#4EA1FF">line_ch3_ch4</b> in ~00:18</div>
+            </div>
+            <div style="height:104px;flex:none;display:flex;gap:10px">
+              <sc-for list="{{ trackStats }}" as="ts" hint-placeholder-count="4">
+                <div style="flex:1;background:#0D1118;border:1px solid #1C2330;border-radius:2px;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;gap:4px">
+                  <div style="font-size:9.5px;color:#5A6577;letter-spacing:.12em">{{ ts.label }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;color:{{ ts.color }}">{{ ts.val }}</div>
+                  <div style="font-size:10px;color:#8B96A8">{{ ts.sub }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ────── REPORTS ────── -->
+      <sc-if value="{{ isReport }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Post-Analysis Reports" style="flex:1;display:flex;gap:12px;min-height:0;padding:12px 14px">
+          <div style="width:560px;flex:none;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-height:0">
+            <div style="height:38px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #161C25">
+              <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">TRACK SESSIONS · 2026-07-13</span>
+              <div style="flex:1"></div>
+              <span style="font-size:10px;color:#3A4557;font-family:'IBM Plex Mono',monospace">stored UTC · shown KST</span>
+            </div>
+            <div style="display:grid;grid-template-columns:70px 76px 1fr 96px 54px;padding:7px 14px;border-bottom:1px solid #161C25;font-size:9px;font-weight:700;letter-spacing:.1em;color:#5A6577">
+              <span>TRACK</span><span>FIRST SEEN</span><span>CHANNEL PATH</span><span>DURATION</span><span>EVENTS</span>
+            </div>
+            <div style="flex:1;overflow-y:auto">
+              <sc-for list="{{ reports }}" as="r" hint-placeholder-count="6">
+                <div onClick="{{ r.pick }}" style-hover="background:#161C25" style="display:grid;grid-template-columns:70px 76px 1fr 96px 54px;align-items:center;padding:9px 14px;cursor:pointer;background:{{ r.bg }};border-left:2px solid {{ r.edge }};font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#C6CEDB">
+                  <span style="font-weight:600">{{ r.id }}</span><span style="color:#8B96A8">{{ r.first }}</span><span style="color:#8B96A8">{{ r.path }}</span><span style="color:#8B96A8">{{ r.dur }}</span><span style="color:{{ r.evColor }}">{{ r.ev }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-height:0">
+            <div style="height:38px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid #161C25">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">{{ repId }}</span>
+              <span style="font-size:10.5px;color:#8B96A8">{{ repSummary }}</span>
+              <div style="flex:1"></div>
+              <button style-hover="border-color:#3A4557;color:#E2E8F2" style="height:26px;padding:0 12px;background:transparent;border:1px solid #232B38;border-radius:2px;color:#8B96A8;font-size:10px;font-weight:600;letter-spacing:.1em;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">EXPORT PDF</button>
+            </div>
+            <div style="flex:1;display:flex;gap:0;min-height:0">
+              <div style="flex:1.3;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0">
+                <div style="font-size:9.5px;font-weight:700;letter-spacing:.14em;color:#5A6577">MOVEMENT PATH (per-channel pixel coords)</div>
+                <div style="flex:1;position:relative;border:1px solid #1C2330;border-radius:2px;background:{{ repBg }};overflow:hidden;min-height:0">
+                  <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px)"></div>
+                  <svg viewBox="0 0 100 56" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">
+                    <polyline points="{{ repPath }}" fill="none" stroke="#4EA1FF" stroke-width=".45" stroke-dasharray="1.4 .9"></polyline>
+                  </svg>
+                  <div style="position:absolute;bottom:8px;left:10px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:rgba(255,255,255,.55)">{{ repChannel }}</div>
+                </div>
+                <div style="display:flex;gap:10px">
+                  <sc-for list="{{ repShots }}" as="s" hint-placeholder-count="3">
+                    <div style="width:84px;height:110px;border:1px solid #232B38;border-radius:2px;background:repeating-linear-gradient(45deg,#12161F 0 8px,#0F131A 8px 16px);display:grid;place-items:center;position:relative">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#5A6577;text-align:center;line-height:1.5">BESTSHOT<br>{{ s.ch }}</span>
+                      <span style="position:absolute;bottom:4px;left:4px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:#8B96A8">{{ s.t }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="width:1px;background:#161C25"></div>
+              <div style="width:320px;flex:none;padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto">
+                <div style="font-size:9.5px;font-weight:700;letter-spacing:.14em;color:#5A6577">SESSION LOG</div>
+                <sc-for list="{{ repLog }}" as="l" hint-placeholder-count="5">
+                  <div style="display:flex;gap:10px;font-size:10.5px;line-height:1.5">
+                    <span style="font-family:'IBM Plex Mono',monospace;color:#5A6577;flex:none">{{ l.t }}</span>
+                    <span style="color:{{ l.color }}">{{ l.msg }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ────── DEVICES ────── -->
+      <sc-if value="{{ isDevice }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Device Control" style="flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;padding:12px 14px">
+          <div style="height:34px;flex:none;display:flex;align-items:center;gap:14px">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.14em">DEVICE STATUS · CONTROL</div>
+            <div style="font-size:11px;color:#5A6577;font-family:'IBM Plex Mono',monospace">rpi-b → rpi-c → stm32 · uart/spi</div>
+          </div>
+          <div style="height:120px;flex:none;display:flex;gap:10px">
+            <sc-for list="{{ nodes }}" as="nd" hint-placeholder-count="4">
+              <div style="flex:1;background:#0D1118;border:1px solid #1C2330;border-radius:2px;padding:12px 14px;display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:{{ nd.dot }}"></span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">{{ nd.name }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:{{ nd.dot }}">{{ nd.state }}</span>
+                </div>
+                <div style="font-size:10px;color:#8B96A8;line-height:1.55">{{ nd.role }}</div>
+                <div style="flex:1"></div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5A6577">{{ nd.meta }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:1;display:flex;gap:10px;min-height:0">
+            <div style="flex:1;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-height:0">
+              <div style="height:34px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #161C25">
+                <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">ENVIRONMENT SENSORS · RPI-A KERNEL DRIVER</span>
+                <div style="flex:1"></div>
+                <span style="font-size:9.5px;color:#3A4557;font-family:'IBM Plex Mono',monospace">gpio chrdev · 2 Hz</span>
+              </div>
+              <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:1px;background:#161C25;min-height:0">
+                <sc-for list="{{ sensors }}" as="s" hint-placeholder-count="4">
+                  <div style="background:#0D1118;padding:16px 18px;display:flex;flex-direction:column;justify-content:center;gap:8px">
+                    <div style="display:flex;align-items:baseline;gap:8px">
+                      <span style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#8B96A8">{{ s.label }}</span>
+                      <div style="flex:1"></div>
+                      <span style="font-size:9px;font-weight:700;color:{{ s.color }}">{{ s.state }}</span>
+                    </div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:{{ s.color }}">{{ s.val }}<span style="font-size:12px;color:#5A6577"> {{ s.unit }}</span></div>
+                    <div style="height:6px;background:#12161F;border-radius:3px;position:relative;overflow:hidden">
+                      <div style="position:absolute;inset:0;width:{{ s.pct }}%;background:{{ s.color }};border-radius:3px;transition:width .6s"></div>
+                    </div>
+                    <div style="font-size:9.5px;color:#5A6577;font-family:'IBM Plex Mono',monospace">{{ s.range }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-height:0">
+              <div style="height:34px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #161C25">
+                <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">ACTUATORS · RPI-C / STM32</span>
+                <div style="flex:1"></div>
+                <span style="font-size:9.5px;color:#3A4557;font-family:'IBM Plex Mono',monospace">device command queue: 0</span>
+              </div>
+              <div style="flex:1;overflow-y:auto;padding:6px 0">
+                <sc-for list="{{ actuators }}" as="a" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #10141B">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:12px;font-weight:600">{{ a.label }}</div>
+                      <div style="font-size:10px;color:#8B96A8;margin-top:2px">{{ a.desc }}</div>
+                    </div>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:{{ a.stateColor }};width:78px;text-align:right;flex:none">{{ a.state }}</span>
+                    <button onClick="{{ a.toggle }}" style="width:40px;height:20px;border-radius:10px;border:1px solid #232B38;background:{{ a.trackBg }};position:relative;cursor:pointer;flex:none;padding:0">
+                      <span style="position:absolute;top:2px;left:{{ a.knob }};width:14px;height:14px;border-radius:50%;background:#E2E8F2;transition:left .15s"></span>
+                    </button>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ────── ZONES / SETTINGS ────── -->
+      <sc-if value="{{ isZone }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Zone Settings" style="flex:1;display:flex;gap:12px;min-height:0;padding:12px 14px">
+          <div style="flex:1.4;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-height:0">
+            <div style="height:38px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #161C25">
+              <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">ZONE MODEL — ZONE = CAMERA CHANNEL</span>
+              <div style="flex:1"></div>
+              <span style="font-size:9.5px;color:#3A4557;font-family:'IBM Plex Mono',monospace">IVA rules drawn in camera web UI · no floor-plan calibration</span>
+            </div>
+            <div style="display:grid;grid-template-columns:150px 1fr 110px 110px 90px;padding:8px 14px;border-bottom:1px solid #161C25;font-size:9px;font-weight:700;letter-spacing:.1em;color:#5A6577">
+              <span>RULE (naming: line_&lt;from&gt;_&lt;to&gt;)</span><span>BOUNDARY</span><span>Σ IN</span><span>Σ OUT</span><span>DEBOUNCE</span>
+            </div>
+            <div style="flex:1;overflow-y:auto">
+              <sc-for list="{{ zoneRules }}" as="z" hint-placeholder-count="5">
+                <div style-hover="background:#12161F" style="display:grid;grid-template-columns:150px 1fr 110px 110px 90px;align-items:center;padding:10px 14px;border-bottom:1px solid #10141B;font-family:'IBM Plex Mono',monospace;font-size:10.5px">
+                  <span style="color:#4EA1FF">{{ z.rule }}</span>
+                  <span style="color:#8B96A8;font-family:'IBM Plex Sans',sans-serif;font-size:11px">{{ z.desc }}</span>
+                  <span style="color:#C6CEDB">{{ z.in }}</span>
+                  <span style="color:#C6CEDB">{{ z.out }}</span>
+                  <span style="color:#2FD27D">v7 ON</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="flex:none;padding:12px 14px;border-top:1px solid #161C25;font-size:10px;color:#5A6577;line-height:1.7">Occupancy is sourced from /metadata snapshots; flow from /events counter deltas. Counter decrease ⇒ app restart (delta reset). ΣEnter−ΣExit integration is prohibited (drift).</div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-height:0">
+            <div style="background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column">
+              <div style="height:38px;flex:none;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #161C25;font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">POLLING CONTRACT · RPI-B → CAMERA (PULL)</div>
+              <sc-for list="{{ polls }}" as="pl" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #10141B">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#4EA1FF;width:110px;flex:none">{{ pl.ep }}</span>
+                  <span style="font-size:10.5px;color:#8B96A8;flex:1">{{ pl.desc }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#C6CEDB;flex:none">{{ pl.period }}</span>
+                  <span style="width:8px;height:8px;border-radius:50%;background:#2FD27D;flex:none"></span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="flex:1;background:#0D1118;border:1px solid #1C2330;border-radius:2px;display:flex;flex-direction:column;min-height:0">
+              <div style="height:38px;flex:none;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #161C25;font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#8B96A8">SYSTEM CONVENTIONS</div>
+              <div style="flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+                <sc-for list="{{ conventions }}" as="c" hint-placeholder-count="5">
+                  <div style="display:flex;gap:10px;font-size:11px;line-height:1.55">
+                    <span style="color:#2FD27D;flex:none;font-family:'IBM Plex Mono',monospace">✓</span>
+                    <span style="color:#C6CEDB">{{ c }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+  <!-- ══════════ CONGESTION TOAST ══════════ -->
+  <sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;top:64px;right:16px;width:380px;background:#12161F;border:1px solid #FFB224;border-left:3px solid #FFB224;border-radius:2px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start;animation:gx-toast .25s;box-shadow:0 8px 30px rgba(0,0,0,.5);z-index:40">
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#FFB224">CONGESTION FORECAST</div>
+        <div style="font-size:12px;color:#E2E8F2;margin-top:4px;line-height:1.5">CH2 CONCOURSE A predicted <b style="font-family:'IBM Plex Mono',monospace">{{ warnPct }}%</b> load in 5 min<br><span style="color:#8B96A8;font-size:11px">flow-propagation model · EWMA α=0.3 · /prediction</span></div>
+        <div style="display:flex;gap:8px;margin-top:9px">
+          <button onClick="{{ toastToHeat }}" style="height:24px;padding:0 12px;background:#FFB224;border:none;border-radius:2px;color:#0A0D12;font-size:10px;font-weight:700;letter-spacing:.08em;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">VIEW FORECAST</button>
+          <button onClick="{{ dismissToast }}" style="height:24px;padding:0 12px;background:transparent;border:1px solid #232B38;border-radius:2px;color:#8B96A8;font-size:10px;font-weight:600;letter-spacing:.08em;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">DISMISS</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ══════════ DISASTER OVERLAY ══════════ -->
+  <sc-if value="{{ disasterOn }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Disaster Response Mode" style="position:absolute;inset:0;background:rgba(8,6,6,.94);backdrop-filter:blur(3px);z-index:50;display:flex;flex-direction:column">
+      <div style="height:6px;flex:none;background:repeating-linear-gradient(45deg,{{ accent }} 0 28px,#1a0c0a 28px 56px);animation:gx-stripe 1.2s linear infinite"></div>
+      <div style="height:76px;flex:none;display:flex;align-items:center;gap:18px;padding:0 28px;border-bottom:1px solid #3A1512">
+        <div style="width:44px;height:44px;background:{{ accent }};display:grid;place-items:center;border-radius:2px;animation:gx-pulse 1.2s infinite"><span style="color:#0A0D12;font-weight:700;font-size:22px">!</span></div>
+        <div>
+          <div style="font-size:22px;font-weight:700;letter-spacing:.12em;color:{{ accent }}">FIRE ALARM — SECTOR B</div>
+          <div style="font-size:11.5px;color:#B08A85;font-family:'IBM Plex Mono',monospace;margin-top:2px">sensor-only decision · rpi-b · raised {{ drillTime }} KST · cross-matching N/A by design</div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:{{ accent }}">{{ drillElapsed }}</div>
+      </div>
+      <div style="flex:1;display:flex;gap:14px;padding:18px 28px;min-height:0">
+        <div style="width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+          <div style="background:#140D0C;border:1px solid #3A1512;border-radius:2px;padding:16px">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;color:#B08A85;margin-bottom:12px">TRIGGER · RPI-A SENSOR NODE S3</div>
+            <sc-for list="{{ dTriggers }}" as="dt" hint-placeholder-count="4">
+              <div style="display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid #221110">
+                <span style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#B08A85;width:70px;flex:none">{{ dt.label }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;color:{{ dt.color }}">{{ dt.val }}</span>
+                <div style="flex:1"></div>
+                <span style="font-size:9.5px;font-family:'IBM Plex Mono',monospace;color:{{ dt.color }}">{{ dt.flag }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:1;background:#140D0C;border:1px solid #3A1512;border-radius:2px;padding:16px;min-height:0;display:flex;flex-direction:column">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;color:#B08A85;margin-bottom:12px">OCCUPANCY IN AFFECTED ZONES · EVAC PRIORITY</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{ dOcc }}" as="dz" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;width:36px;flex:none;color:#E2E8F2">{{ dz.ch }}</span>
+                  <div style="flex:1;height:10px;background:#221110;border-radius:5px;overflow:hidden;position:relative">
+                    <div style="position:absolute;inset:0;width:{{ dz.pct }}%;background:{{ dz.color }};border-radius:5px"></div>
+                  </div>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;width:30px;text-align:right;color:{{ dz.color }}">{{ dz.occ }}</span>
+                  <span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:{{ dz.color }};border:1px solid {{ dz.color }};border-radius:2px;padding:2px 7px;width:56px;text-align:center;flex:none">{{ dz.prio }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="flex:1"></div>
+            <div style="font-size:10px;color:#7A5B57;line-height:1.65;border-top:1px solid #221110;padding-top:10px">Camera contributes occupancy only — fire decision remains sensor-sourced. LED matrix routing evacuees away from CH2 concourse.</div>
+          </div>
+        </div>
+        <div style="flex:1;background:#140D0C;border:1px solid #3A1512;border-radius:2px;display:flex;flex-direction:column;min-height:0">
+          <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid #221110">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.14em;color:#B08A85">AUTOMATED RESPONSE · RPI-C → STM32</span>
+            <div style="flex:1"></div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#B08A85">{{ dProgress }}</span>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:10px 16px">
+            <sc-for list="{{ dActions }}" as="da" hint-placeholder-count="6">
+              <div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid #221110;opacity:{{ da.op }}">
+                <span style="width:22px;height:22px;flex:none;border-radius:50%;border:1.5px solid {{ da.ring }};display:grid;place-items:center;font-size:11px;color:{{ da.ring }};background:{{ da.fill }}">{{ da.mark }}</span>
+                <div style="flex:1">
+                  <div style="font-size:12.5px;font-weight:600;color:#E8DEDC">{{ da.label }}</div>
+                  <div style="font-size:10px;color:#7A5B57;font-family:'IBM Plex Mono',monospace;margin-top:2px">{{ da.detail }}</div>
+                </div>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#B08A85;flex:none">{{ da.t }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:none;display:flex;gap:10px;padding:14px 16px;border-top:1px solid #221110">
+            <button onClick="{{ ackDrill }}" style="height:36px;padding:0 22px;background:{{ accent }};border:none;border-radius:2px;color:#0A0D12;font-weight:700;font-size:12px;letter-spacing:.1em;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">ACKNOWLEDGE — KEEP ALARM</button>
+            <button onClick="{{ resetDrill }}" style-hover="border-color:#B08A85;color:#E8DEDC" style="height:36px;padding:0 22px;background:transparent;border:1px solid #3A1512;border-radius:2px;color:#B08A85;font-weight:600;font-size:12px;letter-spacing:.1em;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">RESET DRILL</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1920, &quot;height&quot;: 1080}, &quot;alertAccent&quot;: {&quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#FF4A36&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;#FF4A36&quot;, &quot;#FF7A1A&quot;, &quot;#E5484D&quot;], &quot;section&quot;: &quot;Alarm&quot;}, &quot;defaultLayout&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;grid&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;grid&quot;, &quot;focus&quot;, &quot;strip&quot;], &quot;section&quot;: &quot;Live wall&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'live',
+    layout: null,
+    focusCh: 0,
+    overlay: true,
+    tick: 0,
+    now: new Date(),
+    occ: [23, 47, 12, 6],
+    hist: [[], [], [], []],
+    events: [],
+    toast: false,
+    toastDismissed: false,
+    disaster: false,
+    drillStart: null,
+    dStep: 0,
+    alarm: false,
+    selReport: 0,
+    act: { door: false, valve: false, fan: true, led: true, buzzer: false, beacon: false },
+    boxes: null
+  };
+
+  CH = [
+    { name: 'CH1 · LOBBY EAST', cap: 60, rate: 0.4,
+      bg: 'linear-gradient(160deg,#2A3038 0%,#1B2027 45%,#12161C 100%)' },
+    { name: 'CH2 · CONCOURSE A', cap: 80, rate: 3.2,
+      bg: 'linear-gradient(200deg,#33302B 0%,#221F1B 50%,#141210 100%)' },
+    { name: 'CH3 · CORRIDOR B2', cap: 40, rate: -0.6,
+      bg: 'linear-gradient(140deg,#252B33 0%,#171B22 55%,#0F1216 100%)' },
+    { name: 'CH4 · LOADING DOCK', cap: 30, rate: 0.1,
+      bg: 'linear-gradient(180deg,#2B2E2A 0%,#1B1E1A 50%,#101210 100%)' }
+  ];
+
+  EVQ = [
+    { at: 3,  sev: 'INFO', src: 'CH4',  msg: 'line_ch4_ch3 crossing OUT +1 (debounced v7)' },
+    { at: 6,  sev: 'WARN', src: 'CH2',  msg: 'Occupancy 47/80 rising — inflow 4.1/min via line_ch1_ch2' },
+    { at: 10, sev: 'INFO', src: 'RPI-B', msg: 'BestShot 3 objects fetched → local store (volatile source)' },
+    { at: 15, sev: 'WARN', src: 'PRED', msg: 'CH2 forecast 82% load @ +5 min (EWMA α=0.3)' },
+    { at: 21, sev: 'INFO', src: 'CH1',  msg: 'New track P-1058 · upper BLACK/LONG lower GRAY/LONG' },
+    { at: 27, sev: 'INFO', src: 'RPI-A', msg: 'Sensor sweep OK · CO 11 ppm · 24.1 °C · 41 %RH' },
+    { at: 33, sev: 'WARN', src: 'CH3',  msg: 'Hand-over match CH1→CH3 conf 0.87 (attr+direction)' },
+    { at: 40, sev: 'INFO', src: 'DB',   msg: 'ZONE_OCCUPANCY snapshot batch committed (UTC)' }
+  ];
+
+  DACT = [
+    { label: 'Fire door relay — CLOSE', detail: 'stm32 relay ch1 · sector B stairwell', },
+    { label: 'Gas valve servo — SHUT OFF', detail: 'stm32 servo ch2 · main line B', },
+    { label: 'Ventilation fan — FULL (smoke extract)', detail: 'dc fan pwm 100% · override congestion mode', },
+    { label: 'LED matrix — EVACUATION ROUTE EAST', detail: 'rpi-c i2c panel ×3 · arrow east', },
+    { label: 'LCD — "FIRE · DO NOT USE ELEVATOR"', detail: 'rpi-c spi lcd · kr/en alternating', },
+    { label: 'Buzzer + beacon — ON', detail: 'stm32 gpio · pattern FIRE-1', }
+  ];
+
+  REPORTS = [
+    { id: 'T-0412', first: '14:02:11', path: 'CH1 → CH3 (live)', dur: '00:07:41', ev: 2 },
+    { id: 'T-0398', first: '13:44:02', path: 'CH2 → CH1 → CH4', dur: '00:12:18', ev: 1 },
+    { id: 'T-0371', first: '13:11:47', path: 'CH4 → CH3', dur: '00:04:52', ev: 0 },
+    { id: 'T-0355', first: '12:58:30', path: 'CH1 → CH2', dur: '00:09:05', ev: 3 },
+    { id: 'T-0340', first: '12:31:19', path: 'CH2 (single)', dur: '00:03:24', ev: 0 },
+    { id: 'T-0327', first: '12:07:55', path: 'CH3 → CH4', dur: '00:06:11', ev: 1 },
+    { id: 'T-0311', first: '11:49:38', path: 'CH1 → CH3 → CH4', dur: '00:15:47', ev: 2 }
+  ];
+
+  componentDidMount() {
+    this.initBoxes();
+    this.setState({
+      events: [
+        { time: '14:08:12', sev: 'INFO', src: 'SYS', msg: 'Qt VMS connected · 4/4 RTSP up · DB OK' },
+        { time: '14:08:40', sev: 'INFO', src: 'RPI-B', msg: 'Polling contract active · /metadata 1.0 s · /events 1.0 s · /prediction 15 s' }
+      ]
+    });
+    this.timer = setInterval(() => this.onTick(), 1000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  initBoxes() {
+    const mk = (n, seed) => Array.from({ length: n }, (_, i) => ({
+      x: 12 + ((seed * 37 + i * 29) % 60), y: 22 + ((seed * 17 + i * 41) % 45),
+      w: 5.5, h: 21, dx: (i % 2 ? 1 : -1) * (0.8 + (i % 3) * 0.4), dy: (i % 3 ? 0.3 : -0.3),
+      id: 1040 + seed * 4 + i
+    }));
+    this.setState({ boxes: [mk(2, 0), mk(4, 1), mk(1, 2), mk(1, 3)] });
+  }
+
+  onTick() {
+    const s = this.state;
+    const tick = s.tick + 1;
+    const patch = { tick, now: new Date() };
+
+    if (tick % 3 === 0 && s.boxes) {
+      patch.boxes = s.boxes.map(arr => arr.map(b => {
+        let x = b.x + b.dx, y = b.y + b.dy, dx = b.dx, dy = b.dy;
+        if (x < 4 || x > 82) { dx = -dx; x = b.x + dx; }
+        if (y < 12 || y > 68) { dy = -dy; y = b.y + dy; }
+        return { ...b, x, y, dx, dy };
+      }));
+      patch.occ = s.occ.map((v, i) => {
+        const drift = Math.round((Math.random() - 0.45) * 3) + (i === 1 ? 1 : 0);
+        return Math.max(0, Math.min(this.CH[i].cap, v + drift));
+      });
+      patch.hist = s.hist.map((h, i) => [...h, patch.occ[i]].slice(-20));
+    }
+
+    const ev = this.EVQ.find(e => e.at === tick);
+    if (ev) patch.events = [{ time: this.fmt(new Date(), 9), ...ev }, ...s.events].slice(0, 30);
+
+    if (tick === 14 && !s.toastDismissed) patch.toast = true;
+
+    if (s.disaster && s.dStep < this.DACT.length && tick % 1 === 0) {
+      patch.dStep = Math.min(this.DACT.length, s.dStep + 1);
+    }
+    this.setState(patch);
+  }
+
+  fmt(d, offsetH) {
+    const t = new Date(d.getTime() + (offsetH - (-d.getTimezoneOffset() / 60)) * 3600000);
+    const p = n => String(n).padStart(2, '0');
+    return p(t.getHours()) + ':' + p(t.getMinutes()) + ':' + p(t.getSeconds());
+  }
+
+  heatBg(i, load) {
+    const spots = [
+      ['26% 60%', '70% 40%'], ['38% 55%', '62% 62%', '78% 35%'], ['50% 50%'], ['30% 45%']
+    ][i];
+    const a = Math.min(0.75, 0.25 + load * 0.6);
+    const col = load > 0.7 ? '255,80,50' : load > 0.45 ? '255,178,36' : '78,161,255';
+    return spots.map(pos => 'radial-gradient(ellipse 30% 34% at ' + pos + ',rgba(' + col + ',' + a.toFixed(2) + '),transparent 70%)').join(',');
+  }
+
+  renderVals() {
+    const s = this.state;
+    const P = this.props;
+    const accent = P.alertAccent ?? '#FF4A36';
+    const layout = s.layout ?? (P.defaultLayout ?? 'grid');
+    const go = id => () => this.setState({ screen: id });
+    const now = s.now;
+    const kst = this.fmt(now, 9), utc = this.fmt(now, 0);
+
+    // nav
+    const NAV = [
+      ['live', 'LIVE', '▦'], ['heat', 'CROWD', '◉'], ['track', 'TRACK', '⇢'],
+      ['report', 'REPORT', '▤'], ['device', 'DEVICE', '◫'], ['zone', 'ZONES', '⚙']
+    ];
+    const nav = NAV.map(([id, label, icon]) => ({
+      id, label, icon, go: go(id),
+      bg: s.screen === id ? '#161C25' : 'transparent',
+      edge: s.screen === id ? accent : 'transparent',
+      color: s.screen === id ? '#E2E8F2' : '#5A6577'
+    }));
+
+    // live grid geometry
+    const AREAS = {
+      grid: { cols: '1fr 1fr', rows: '1fr 1fr', areas: ['1/1/2/2', '1/2/2/3', '2/1/3/2', '2/2/3/3'] },
+      focus: { cols: '2.4fr 1fr', rows: '1fr 1fr 1fr', areas: null },
+      strip: { cols: '1fr 1fr 1fr 1fr', rows: '1fr 150px', areas: null }
+    };
+    let gridCols = AREAS[layout].cols, gridRows = AREAS[layout].rows;
+    const areaFor = i => {
+      if (layout === 'grid') return AREAS.grid.areas[i];
+      const f = s.focusCh;
+      if (layout === 'focus') {
+        if (i === f) return '1/1/4/2';
+        const others = [0, 1, 2, 3].filter(k => k !== f);
+        return (others.indexOf(i) + 1) + '/2/' + (others.indexOf(i) + 2) + '/3';
+      }
+      if (i === f) return '1/1/2/5';
+      const others = [0, 1, 2, 3].filter(k => k !== f);
+      const slot = others.indexOf(i) + 1;
+      return '2/' + slot + '/3/' + (slot + 1);
+    };
+    if (layout === 'strip') { /* focused big on top, all four thumbs? use 3 others */ }
+
+    const boxes = s.boxes ?? [[], [], [], []];
+    const attrs = ['BLK/GRY', 'NVY/BLK', 'GRY/GRY', 'BRN/BLK'];
+    const liveChannels = this.CH.map((c, i) => {
+      const load = s.occ[i] / c.cap;
+      return {
+        name: c.name, bg: c.bg, cap: c.cap, occ: s.occ[i],
+        occColor: load > 0.7 ? accent : load > 0.45 ? '#FFB224' : '#2FD27D',
+        border: (layout !== 'grid' && s.focusCh === i) ? '#3A4557' : '#232B38',
+        area: areaFor(i),
+        flow: (c.rate >= 0 ? '+' : '') + c.rate.toFixed(1) + '/min',
+        focus: () => this.setState({ focusCh: i }),
+        dets: boxes[i].map((b, k) => ({
+          x: b.x.toFixed(1), y: b.y.toFixed(1), w: b.w, h: b.h,
+          stroke: '#4EA1FF',
+          tag: 'P-' + b.id + ' · ' + attrs[(b.id + k) % 4]
+        }))
+      };
+    });
+
+    const layoutBtns = [['grid', 'GRID 2×2'], ['focus', 'FOCUS 1+3'], ['strip', 'STAGE + STRIP']].map(([id, label]) => ({
+      label, set: () => this.setState({ layout: id }),
+      bg: layout === id ? '#232B38' : 'transparent',
+      color: layout === id ? '#E2E8F2' : '#5A6577'
+    }));
+
+    const sev = v => v === 'FIRE' ? accent : v === 'WARN' ? '#FFB224' : '#4EA1FF';
+    const events = s.events.map(e => ({ ...e, sevColor: sev(e.sev) }));
+
+    const rates = this.CH.map(c => c.rate);
+    const occRows = this.CH.map((c, i) => {
+      const pct = Math.round(100 * s.occ[i] / c.cap);
+      const pred5 = Math.max(0, Math.min(c.cap, s.occ[i] + 5 * rates[i]));
+      const predPct = Math.min(98, Math.round(100 * pred5 / c.cap));
+      return {
+        ch: 'CH' + (i + 1), pct: Math.min(100, pct), predPct,
+        color: pct > 70 ? accent : pct > 45 ? '#FFB224' : '#4EA1FF',
+        txt: s.occ[i] + ' → ' + Math.round(pred5)
+      };
+    });
+
+    // heatmap
+    const heatChannels = this.CH.map((c, i) => {
+      const load = s.occ[i] / c.cap;
+      const loadColor = load > 0.7 ? accent : load > 0.45 ? '#FFB224' : '#2FD27D';
+      const h = s.hist[i].length ? s.hist[i] : [s.occ[i]];
+      const max = c.cap;
+      const pts = h.map((v, k) => (k * (78 / Math.max(1, h.length - 1))).toFixed(1) + ',' + (31 - 27 * v / max).toFixed(1)).join(' ');
+      const lastX = 78, lastY = 31 - 27 * h[h.length - 1] / max;
+      const predY = n => 31 - 27 * Math.max(0, Math.min(max, h[h.length - 1] + n * c.rate)) / max;
+      const sparkPred = lastX + ',' + lastY.toFixed(1) + ' ' + (lastX + 14) + ',' + predY(5).toFixed(1) + ' ' + (lastX + 28) + ',' + predY(10).toFixed(1);
+      const preds = [1, 5, 10].map(n => {
+        const v = Math.round(Math.max(0, Math.min(max, s.occ[i] + n * c.rate)));
+        const p = v / max;
+        return { hz: '+' + n + ' MIN', val: String(v), color: p > 0.7 ? accent : p > 0.45 ? '#FFB224' : '#C6CEDB' };
+      });
+      return {
+        name: c.name, bg: c.bg, occ: s.occ[i], cap: c.cap,
+        loadPct: Math.round(load * 100), loadColor,
+        heat: this.heatBg(i, load),
+        flow: 'in ' + Math.max(0, c.rate + 1).toFixed(1) + ' · out ' + Math.max(0, 1 - c.rate / 2).toFixed(1) + ' /min',
+        spark: pts, sparkPred, preds
+      };
+    });
+    const warnPct = Math.min(99, Math.round(100 * (s.occ[1] + 5 * this.CH[1].rate) / this.CH[1].cap));
+
+    // tracking
+    const handovers = [
+      { ch: 'CH1 · LOBBY EAST', span: '14:02:11 – 14:04:35', conf: 'ORIGIN', confColor: '#5A6577', dotColor: '#4EA1FF', dotFill: '#4EA1FF', line: true, note: 'ObjectId 1042 · BestShot ×2 · attrs captured on update' },
+      { ch: 'CH2 · CONCOURSE A', span: '14:04:52 – 14:07:18', conf: 'CONF 0.91', confColor: '#2FD27D', dotColor: '#4EA1FF', dotFill: '#4EA1FF', line: true, note: 'Matched: Δt 17 s + line_ch1_ch2 direction + UPPER/LOWER color' },
+      { ch: 'CH3 · CORRIDOR B2', span: '14:07:31 – now', conf: 'CONF 0.87', confColor: '#2FD27D', dotColor: '#2FD27D', dotFill: 'transparent', line: false, note: 'Active track · ObjectId 2231 · heading east' }
+    ];
+    const trackPath = '8,46 22,40 34,42 47,34 58,30 66,27';
+    const trackPts = [
+      { x: 8, y: 82, size: 8, color: '#4EA1FF', label: '14:07:31 enter' },
+      { x: 34, y: 75, size: 6, color: '#4EA1FF', label: '' },
+      { x: 58, y: 54, size: 6, color: '#4EA1FF', label: '14:09:02' }
+    ];
+    const trackStats = [
+      { label: 'ELAPSED', val: '00:07:41', sub: 'since first detection', color: '#E2E8F2' },
+      { label: 'CHANNELS', val: '3 / 4', sub: 'CH1 → CH2 → CH3', color: '#E2E8F2' },
+      { label: 'MATCH CONF (AVG)', val: '0.89', sub: 'attr + time-gap + direction', color: '#2FD27D' },
+      { label: 'BESTSHOTS SAVED', val: '5', sub: 'rpi-b local store', color: '#4EA1FF' }
+    ];
+
+    // reports
+    const sel = s.selReport;
+    const reports = this.REPORTS.map((r, i) => ({
+      ...r, ev: String(r.ev),
+      evColor: r.ev >= 2 ? '#FFB224' : '#5A6577',
+      bg: i === sel ? '#161C25' : 'transparent',
+      edge: i === sel ? accent : 'transparent',
+      pick: () => this.setState({ selReport: i })
+    }));
+    const rr = this.REPORTS[sel];
+    const repChs = rr.path.replace(' (live)', '').replace(' (single)', '').split(' → ');
+    const repShots = repChs.slice(0, 3).map((c, i) => ({ ch: c, t: rr.first }));
+    const repLog = [
+      { t: rr.first, msg: 'First detection · ' + repChs[0] + ' · new ObjectId issued', color: '#C6CEDB' },
+      { t: '+00:02', msg: 'BestShot received → downloaded by rpi-b (volatile source)', color: '#C6CEDB' },
+      { t: '+02:24', msg: repChs.length > 1 ? 'Hand-over ' + repChs[0] + ' → ' + repChs[1] + ' · conf 0.9' : 'Track stayed in single channel', color: '#4EA1FF' },
+      { t: '+05:10', msg: rr.ev > 0 ? 'WARN — dwell > 3 min near line_' + repChs[0].toLowerCase() + '_x' : 'No rule events on this session', color: rr.ev > 0 ? '#FFB224' : '#5A6577' },
+      { t: '+' + rr.dur.slice(3), msg: 'Track closed · session archived (UTC)', color: '#C6CEDB' }
+    ];
+
+    // devices
+    const nodes = [
+      { name: 'RPI-A', state: 'ONLINE', dot: '#2FD27D', role: 'Kernel GPIO driver · CO / temp / hum / flame sampling', meta: 'up 3d 04h · drv v0.9.2' },
+      { name: 'RPI-B', state: 'ONLINE', dot: '#2FD27D', role: 'Camera polling (pull) · fire decision · PostgreSQL ingest', meta: 'poll ok · lastSeq 48213 · db 4 ms' },
+      { name: 'RPI-C', state: 'ONLINE', dot: '#2FD27D', role: 'Device command receiver · STM32 bridge (UART/SPI)', meta: 'queue 0 · uart 115200' },
+      { name: 'STM32', state: 'ARMED', dot: '#4EA1FF', role: 'Relay · servo · fan PWM · LED matrix · LCD · buzzer', meta: 'fw 1.4.0 · crc ok' }
+    ];
+    const drill = s.disaster || s.alarm;
+    const sensors = [
+      { label: 'CO', val: drill ? '214' : '11', unit: 'ppm', pct: drill ? 92 : 8, color: drill ? accent : '#2FD27D', state: drill ? 'CRITICAL' : 'NORMAL', range: 'warn ≥ 35 · crit ≥ 100' },
+      { label: 'TEMPERATURE', val: drill ? '78.4' : '24.3', unit: '°C', pct: drill ? 88 : 27, color: drill ? accent : '#2FD27D', state: drill ? 'CRITICAL' : 'NORMAL', range: 'warn ≥ 45 · crit ≥ 60' },
+      { label: 'HUMIDITY', val: drill ? '23' : '41', unit: '%RH', pct: drill ? 23 : 41, color: '#4EA1FF', state: 'NORMAL', range: 'ref 30 – 60' },
+      { label: 'FLAME IR', val: drill ? 'DETECT' : 'CLEAR', unit: '', pct: drill ? 100 : 2, color: drill ? accent : '#2FD27D', state: drill ? 'TRIGGERED' : 'NORMAL', range: 'ir band 4.3 µm' }
+    ];
+    const A = s.act;
+    const mkAct = (key, label, desc, onLabel, offLabel) => ({
+      label, desc,
+      state: A[key] ? onLabel : offLabel,
+      stateColor: A[key] ? '#2FD27D' : '#5A6577',
+      trackBg: A[key] ? '#1E4634' : '#12161F',
+      knob: A[key] ? '23px' : '2px',
+      toggle: () => this.setState(st => ({ act: { ...st.act, [key]: !st.act[key] } }))
+    });
+    const actuators = [
+      mkAct('door', 'Fire door relay', 'Sector B stairwell · fail-safe close', 'CLOSED', 'OPEN'),
+      mkAct('valve', 'Gas valve servo', 'Main line B shut-off', 'SHUT', 'OPEN'),
+      mkAct('fan', 'Ventilation fan', 'PWM · AUTO linked to CH2 congestion forecast', 'AUTO 62%', 'OFF'),
+      mkAct('led', 'LED matrix ×3', 'Congestion level + evacuation arrows', 'ACTIVE', 'OFF'),
+      mkAct('buzzer', 'Buzzer', 'Pattern FIRE-1 · 3.2 kHz', 'ON', 'STANDBY'),
+      mkAct('beacon', 'Warning beacon', 'Red strobe · sector B entries', 'ON', 'STANDBY')
+    ];
+
+    // zones
+    const zoneRules = [
+      { rule: 'line_ch1_ch2', desc: 'Lobby East ↔ Concourse A archway', in: '1,204', out: '1,131' },
+      { rule: 'line_ch2_ch3', desc: 'Concourse A ↔ Corridor B2 door pair', in: '873', out: '901' },
+      { rule: 'line_ch3_ch4', desc: 'Corridor B2 ↔ Loading Dock rollup', in: '162', out: '158' },
+      { rule: 'line_ch1_ext', desc: 'Lobby East ↔ exterior main entrance', in: '2,418', out: '2,300' },
+      { rule: 'line_ch4_ext', desc: 'Loading Dock ↔ exterior yard gate', in: '84', out: '95' }
+    ];
+    const polls = [
+      { ep: '/metadata', desc: 'Tracking stream → occupancy snapshots (no event integration)', period: '1.0 s' },
+      { ep: '/events', desc: 'LineCrossing counters → flow deltas (5 min sliding window)', period: '1.0 s' },
+      { ep: '/prediction', desc: 'Onboard flow-propagation forecast · horizons 1/5/10 min', period: '15 s' },
+      { ep: '/bestshot', desc: 'JPEG download immediately on arrival (source expires in minutes)', period: 'on event' },
+      { ep: '/capture', desc: 'Full-frame still on demand (incident bookmark)', period: 'manual' }
+    ];
+    const conventions = [
+      'Pull model only — camera never pushes; rpi-b polls juan_application over HTTPS.',
+      'Storage in UTC everywhere; KST conversion at display layer (this VMS).',
+      'DETECTIONS.geom = per-channel pixel coords (2592×1520) · cross-channel spatial ops prohibited.',
+      'Fire decision = environment sensors only; camera supplies occupancy for evac priority.',
+      'Single juan_application subscribes to all 4 channels; ch0 legacy app is test-only.',
+      'Counter decrease on /events ⇒ camera app restart · treat as delta reset, not negative flow.'
+    ];
+
+    // disaster
+    const drillTime = s.drillStart ? this.fmt(s.drillStart, 9) : kst;
+    const elapsed = s.drillStart ? Math.max(0, Math.floor((now - s.drillStart) / 1000)) : 0;
+    const p2 = n => String(n).padStart(2, '0');
+    const dTriggers = [
+      { label: 'CO', val: '214 ppm', flag: '▲ CRIT ≥100', color: accent },
+      { label: 'TEMP', val: '78.4 °C', flag: '▲ CRIT ≥60', color: accent },
+      { label: 'FLAME IR', val: 'DETECTED', flag: 'TRIGGERED', color: accent },
+      { label: 'HUMIDITY', val: '23 %RH', flag: 'falling', color: '#FFB224' }
+    ];
+    const dOcc = this.CH.map((c, i) => {
+      const load = s.occ[i] / c.cap;
+      const prio = i === 1 ? 'EVAC 1' : i === 2 ? 'EVAC 2' : load > 0.3 ? 'EVAC 3' : 'CLEAR';
+      const color = prio === 'EVAC 1' ? accent : prio === 'EVAC 2' ? '#FFB224' : '#2FD27D';
+      return { ch: 'CH' + (i + 1), occ: s.occ[i], pct: Math.round(load * 100), prio, color };
+    });
+    const dActions = this.DACT.map((a, i) => {
+      const done = i < s.dStep;
+      const active = i === s.dStep;
+      return {
+        label: a.label, detail: a.detail,
+        mark: done ? '✓' : active ? '›' : '',
+        ring: done ? '#2FD27D' : active ? '#FFB224' : '#3A1512',
+        fill: 'transparent',
+        op: done || active ? 1 : 0.45,
+        t: done ? 'T+' + p2(i * 2) + 's · ACK' : active ? 'executing…' : 'queued'
+      };
+    });
+
+    return {
+      accent,
+      clockKST: kst, clockUTC: utc,
+      osdStamp: '2026-07-13 ' + kst,
+      statusPills: [
+        { label: 'CAM 4/4', dot: '#2FD27D' },
+        { label: 'RPI A·B·C', dot: '#2FD27D' },
+        { label: 'DB ' + (s.tick % 2 ? '4' : '5') + 'ms', dot: '#2FD27D' },
+        { label: 'POLL PULL 1.0s', dot: '#4EA1FF' }
+      ],
+      nav,
+      isLive: s.screen === 'live', isHeat: s.screen === 'heat', isTrack: s.screen === 'track',
+      isReport: s.screen === 'report', isDevice: s.screen === 'device', isZone: s.screen === 'zone',
+      gridCols, gridRows, liveChannels, layoutBtns,
+      overlayOn: s.overlay,
+      overlayTrackBg: s.overlay ? '#1E4634' : '#12161F',
+      overlayKnobLeft: s.overlay ? '15px' : '2px',
+      toggleOverlay: () => this.setState({ overlay: !s.overlay }),
+      events, occRows,
+      heatChannels, heatWarn: warnPct > 60, warnPct,
+      handovers, trackPath, trackPts, trackStats,
+      trackBg: this.CH[2].bg, curX: 66, curY: 48,
+      reports, repId: rr.id, repChannel: repChs[repChs.length - 1] + ' · pixel coords 2592×1520',
+      repSummary: rr.path + ' · ' + rr.dur + ' · ' + rr.ev + ' events',
+      repBg: this.CH[0].bg, repPath: '12,48 26,38 40,41 55,30 70,26 84,18', repShots, repLog,
+      nodes, sensors, actuators, zoneRules, polls, conventions,
+      toastOn: s.toast && !s.disaster,
+      dismissToast: () => this.setState({ toast: false, toastDismissed: true }),
+      toastToHeat: () => this.setState({ toast: false, toastDismissed: true, screen: 'heat' }),
+      alarmActive: s.alarm && !s.disaster,
+      startDrill: () => this.setState({
+        disaster: true, dStep: 0, alarm: true, drillStart: new Date(), toast: false,
+        act: { door: true, valve: true, fan: true, led: true, buzzer: true, beacon: true },
+        events: [{ time: kst, sev: 'FIRE', src: 'RPI-B', msg: 'FIRE decision (sensor-only) · sector B · device commands dispatched' }, ...s.events]
+      }),
+      openDisaster: () => this.setState({ disaster: true }),
+      disasterOn: s.disaster,
+      drillTime, drillElapsed: 'T+' + p2(Math.floor(elapsed / 60)) + ':' + p2(elapsed % 60),
+      dTriggers, dOcc, dActions,
+      dProgress: Math.min(s.dStep, this.DACT.length) + ' / ' + this.DACT.length + ' complete',
+      ackDrill: () => this.setState({ disaster: false }),
+      resetDrill: () => this.setState({
+        disaster: false, alarm: false, dStep: 0,
+        act: { door: false, valve: false, fan: true, led: true, buzzer: false, beacon: false }
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

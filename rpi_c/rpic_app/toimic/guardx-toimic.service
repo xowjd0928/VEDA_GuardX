@@ -1,0 +1,43 @@
+# GuardX RPi C TOIMIC 오디오 감지기 systemd 유닛.
+#
+# 설치:
+#   sudo cp guardx-toimic.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now guardx-toimic
+#   journalctl -u guardx-toimic -f
+#
+# ExecStart / WorkingDirectory 경로는 실제 배치 위치에 맞게 수정할 것.
+# 임계값은 ./detector.py --calibrate 로 현장 실측 후 Environment= 에 넣는다.
+[Unit]
+Description=GuardX RPi C TOIMIC audio detector (scream/gunshot, YAMNet on-device)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 실제 리포 위치에 맞게 경로 수정
+WorkingDirectory=/home/dev/7th_VEDA_GROUP2/rpi_c/rpic_app/toimic
+ExecStart=/home/dev/7th_VEDA_GROUP2/rpi_c/rpic_app/toimic/.venv/bin/python detector.py
+
+# --- 튜닝 (필요한 것만 주석 해제) ---
+# demo = 시연 우선(놓치지 않는 쪽) / prod = 운영 우선(오탐 억제)
+Environment=GUARDX_TOIMIC_PROFILE=demo
+# VMS가 붙는 브로커와 같은 곳이어야 팝업이 뜬다 (기본 RPi B)
+#Environment=GUARDX_MQTT_HOST=172.20.33.251
+# --calibrate 결과를 여기에 반영한다
+#Environment=GUARDX_TOIMIC_ABS_FLOOR=0.0100
+#Environment=GUARDX_TOIMIC_CREST_TH=8.0
+# VMS 팝업에 표시할 존/채널
+#Environment=GUARDX_TOIMIC_ZONE=1
+#Environment=GUARDX_TOIMIC_CHANNEL=0
+
+Restart=always
+RestartSec=3
+# 로그가 stdout으로 나가므로 버퍼링을 끈다 (journalctl 실시간 확인용)
+Environment=PYTHONUNBUFFERED=1
+# ALSA 접근을 위해 audio 그룹 사용자로
+User=dev
+SupplementaryGroups=audio
+
+[Install]
+WantedBy=multi-user.target

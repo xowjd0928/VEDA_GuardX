@@ -1,0 +1,70 @@
+#ifndef DECISION_H
+#define DECISION_H
+
+#include <stdbool.h>
+#include "sensor_parser.h"
+
+/*
+ * 화재 판단 상태머신 (임계값 + 연속 카운트 기반).
+ *
+ * 설계 원칙:
+ *  - 센서 1사이클(1Hz) 단위로 DECISION_FEED()에 먹인다. 판단은 전부
+ *    여기 안에서만 일어나고, MQTT/DB를 전혀 모른다 (단위 테스트 가능).
+ *  - "순간 스파이크 1번"으로 소화 시나리오를 발동하지 않도록, 같은
+ *    지표가 N_CONFIRM 사이클 연속 임계값을 넘어야 화재 확정.
+ *  - valid=false인 지표는 그 사이클에서 카운터를 올리지도 내리지도
+ *    않는다(동결). 센서 장애가 화재 오탐/조기 해제 둘 다로 번지지
+ *    않게 하기 위함.
+ *
+ * 상태 전이:
+ *
+ *   NORMAL ──(어느 한 지표가 N_CONFIRM 연속 초과)──→ FIRE
+ *   FIRE   ──(모든 지표가 N_RECOVER 연속 정상)────→ NORMAL (RECOVER 이벤트)
+ *
+ * 비상 버튼은 여기 없다 - 규약 4-2대로 버튼의 실제 제어는 하드웨어
+ * 인터락(RPi A→C 직결)이 이미 처리했고 MQTT 경로는 로깅 전용이므로,
+ * 판단 로직의 입력이 아니다.
+ */
+
+/* --- 임계값 (전부 잠정치) ---------------------------------------------
+ * THRESHOLD_GAS_PPM은 App_Convention 7-2의 1000을 계승. 단 RPi A
+ * 드라이버가 현재 DO 기반 근사값(0 또는 1500)만 주므로 ADC 연동
+ * 전까지는 사실상 감지 여부 판정이다 (rpia_gas.h 주석 참조).
+ * !!! 미확정: 온도 임계값, N_CONFIRM/N_RECOVER는 실측 후 조정 !!! */
+#define THRESHOLD_GAS_PPM   1000
+#define THRESHOLD_TEMP_C    60.0
+#define N_CONFIRM           3    /* 화재 확정에 필요한 연속 초과 사이클 (1Hz면 3초) */
+#define N_RECOVER           10   /* 해제에 필요한 연속 정상 사이클 (10초) */
+
+typedef enum {
+    DECISION_STATE_NORMAL = 0,
+    DECISION_STATE_FIRE   = 1,
+} decision_state_t;
+
+/* FEED 1회의 결과. NONE이 대부분이고, 상태가 "바뀌는 순간"에만
+ * FIRE/RECOVER가 한 번 나온다 (엣지 트리거 - 명령 중복 발행 방지). */
+typedef enum {
+    DECISION_EVENT_NONE    = 0,
+    DECISION_EVENT_FIRE    = 1,   /* 화재 확정 - 대응 시나리오 발동 */
+    DECISION_EVENT_RECOVER = 2,   /* 상황 해제 - 사후 조치 */
+} decision_event_t;
+
+/* 화재 확정의 원인 지표 (DB 기록 + 명령 payload 역추적 필드용) */
+typedef enum {
+    DECISION_CAUSE_NONE  = 0,
+    DECISION_CAUSE_GAS   = 1,
+    DECISION_CAUSE_TEMP  = 2,
+    DECISION_CAUSE_SPARK = 3,
+} decision_cause_t;
+
+/* 센서 1사이클 판정. 반환이 FIRE/RECOVER면 호출측이 대응할 것 */
+decision_event_t DECISION_FEED(const sensor_msg_t *msg);
+
+/* 마지막 FIRE 이벤트의 원인/트리거 시점 seq (RPi A의 seq) */
+decision_cause_t DECISION_LAST_CAUSE(void);
+uint32_t         DECISION_LAST_TRIGGER_SEQ(void);
+const char      *DECISION_CAUSE_STR(decision_cause_t c);
+
+decision_state_t DECISION_STATE(void);
+
+#endif /* DECISION_H */

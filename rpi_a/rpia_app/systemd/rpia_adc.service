@@ -1,0 +1,15 @@
+[Unit]
+Description=GuardX RPi A - rpia_adc kernel module (MCP3008, SPI)
+# 전제: /boot/firmware/config.txt 에 dtoverlay=rpia-adc 가 있어 부팅 시
+# spi0/CE0에 장치가 선언돼 있어야 한다(그래야 insmod가 probe 바인딩됨).
+DefaultDependencies=no
+Before=rpia_publisher.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/insmod /opt/guardx/rpia/drivers/rpia_adc.ko
+ExecStop=/sbin/rmmod rpia_adc
+
+[Install]
+WantedBy=multi-user.target

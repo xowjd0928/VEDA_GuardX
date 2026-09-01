@@ -1,0 +1,18 @@
+[Unit]
+Description=GuardX RPi C - actuator subscriber (App layer)
+# 4개 드라이버 모듈이 모두 로드된 후에 시작 (팬은 커널 모듈이 아니라
+# App이 sysfs로 직접 여는 방식이라 유닛 의존에 포함하지 않는다)
+After=rpic_pca9685.service rpic_stepper.service rpic_pump.service network-online.target
+Requires=rpic_pca9685.service rpic_stepper.service rpic_pump.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/guardx/rpic/app/rpic_subscriber
+Restart=on-failure
+RestartSec=3
+# MQTT 브로커(RPi B)가 아직 안 올라와 있어도 mosquitto_loop_start가
+# 내부에서 재접속을 시도하므로 여기서 대기 로직은 두지 않음
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+# GuardX RPi C - rpic_subscriber 가 RTP 방송 수신기를 켜고 끌 수 있게 한다.
+#
+# 왜 필요한가: 수신기는 방송 중에만 떠 있어야 한다(평상시 스피커를 비워 화재
+# 사이렌이 언제든 장치를 열 수 있게). 그 수명을 쥔 것이 systemd 이므로
+# audio_arbiter 가 systemctl start/stop 을 부른다.
+#
+# rpic_subscriber 를 root 로 돌리면(systemd 유닛에 User= 없음) 이 파일은 필요
+# 없다. 개발 중 일반 계정으로 손수 띄우는 경우를 위해 둔다 - 조율기는 먼저
+# 직접 실행해 보고, 권한이 없으면 sudo -n 으로 한 번 더 시도한다.
+#
+# 허용 범위를 이 유닛의 start/stop 두 가지로 못 박는다. NOPASSWD 를 systemctl
+# 전체에 주면 사실상 root 를 내주는 것이라 그렇게 하지 않는다.
+#
+# 설치 (install.sh 가 해준다. 손으로 할 때는 반드시 visudo -c 로 검사할 것):
+#   sudo install -m 0440 -o root -g root guardx-rpic /etc/sudoers.d/guardx-rpic
+#   sudo visudo -c
+#
+# 사용자명이 dev 가 아니면 아래 두 줄의 dev 를 바꿔야 한다.
+
+dev ALL=(root) NOPASSWD: /usr/bin/systemctl start guardx-broadcast-rtp
+dev ALL=(root) NOPASSWD: /usr/bin/systemctl stop guardx-broadcast-rtp

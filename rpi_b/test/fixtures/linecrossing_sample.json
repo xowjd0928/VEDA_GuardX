@@ -1,0 +1,11 @@
+{
+  "lineCrossing":[
+    {"channel":0,"enable":false,"line":[]},
+    {"channel":1,"enable":true,"line":[
+      {"index":1,"name":"name1","mode":"Right","objectTypeFilter":["Person"],
+       "lineCoordinates":[{"x":1353,"y":185},{"x":1765,"y":1469}]}]},
+    {"channel":2,"enable":false,"line":[]},
+    {"channel":3,"enable":false,"line":[]}]
+}
+
+

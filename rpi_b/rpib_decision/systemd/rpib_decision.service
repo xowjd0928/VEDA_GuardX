@@ -1,0 +1,14 @@
+[Unit]
+Description=GuardX RPi B - fire decision engine (rpib_engine 3분할, 판정)
+After=mosquitto.service network-online.target
+Wants=mosquitto.service network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/guardx/rpib/decision
+ExecStart=/opt/guardx/rpib/decision/app/rpib_decision
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

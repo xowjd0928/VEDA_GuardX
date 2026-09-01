@@ -1,0 +1,16 @@
+# GuardX TOIMIC 감지기 의존성 (RPi C / Python 3.13 / aarch64)
+#
+#   python3 -m venv .venv && . .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# PEP 668(Debian Trixie)이 시스템 pip를 막으므로 venv가 필수다.
+# ai-edge-litert = TensorFlow Lite 런타임의 후속. 전체 TensorFlow는 필요 없다.
+#
+# AEC(방송·사이렌 중 상시 감지)는 pip 가 아니라 시스템 라이브러리를 쓴다:
+#   sudo apt install -y libspeexdsp1
+# ctypes 로 직접 부르므로 휠 사정에 감지기가 묶이지 않는다. 없으면 AEC 만
+# 꺼지고 예전처럼 재생 중 뮤트로 동작한다(감지기는 그대로 뜬다).
+ai-edge-litert>=1.0
+numpy>=1.24
+scipy>=1.10
+paho-mqtt>=2.0

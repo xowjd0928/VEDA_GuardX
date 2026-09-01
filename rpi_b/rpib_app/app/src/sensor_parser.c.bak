@@ -1,0 +1,131 @@
+/*
+ * sensor_parser.c - RPi A 센서/버튼 JSON -> 구조체 파싱
+ *
+ * RPi C cmd_parser.c와 같은 최소 파서 (키 순서 무관, 공백 허용,
+ * 중첩 1단계까지만 - values/valid 객체 내부 키는 최상위와 이름이
+ * 겹치지 않으므로 평면 탐색으로 충분하다).
+ *
+ * 주의: valid 객체의 키("gas"/"temphum"/"spark")와 values 객체의
+ * 키("gas_ppm" 등)는 따옴표 포함 완전 일치로 찾으므로 서로 오인하지
+ * 않는다 ("gas"와 "gas_ppm"은 다른 문자열).
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#include "sensor_parser.h"
+#include "guardx_protocol.h"
+
+/* "키" 다음의 값 시작 위치(콜론 뒤 첫 비공백)를 찾는다. 없으면 NULL.
+ * (RPi C cmd_parser.c의 find_value와 동일 - 노드별 앱이 독립 빌드라
+ *  소스를 공유하지 않고 복제한다. 수정 시 양쪽 동기화할 것) */
+static const char *find_value(const char *json, const char *key)
+{
+    char quoted[40];
+    const char *p;
+
+    snprintf(quoted, sizeof(quoted), "\"%s\"", key);
+    p = strstr(json, quoted);
+    if (!p)
+        return NULL;
+
+    p += strlen(quoted);
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (*p != ':')
+        return NULL;
+    p++;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    return *p ? p : NULL;
+}
+
+/* 값 위치에서 정수/실수/불리언 추출. 실패 시 false */
+static bool get_int(const char *json, const char *key, int *out)
+{
+    const char *p = find_value(json, key);
+
+    if (!p || (*p != '-' && !isdigit((unsigned char)*p)))
+        return false;
+    *out = atoi(p);
+    return true;
+}
+
+static bool get_u32(const char *json, const char *key, uint32_t *out)
+{
+    const char *p = find_value(json, key);
+
+    if (!p || !isdigit((unsigned char)*p))
+        return false;
+    *out = (uint32_t)strtoul(p, NULL, 10);
+    return true;
+}
+
+static bool get_double(const char *json, const char *key, double *out)
+{
+    const char *p = find_value(json, key);
+
+    if (!p || (*p != '-' && !isdigit((unsigned char)*p)))
+        return false;
+    *out = strtod(p, NULL);
+    return true;
+}
+
+static bool get_bool(const char *json, const char *key, bool *out)
+{
+    const char *p = find_value(json, key);
+
+    if (!p)
+        return false;
+    if (strncmp(p, "true", 4) == 0)  { *out = true;  return true; }
+    if (strncmp(p, "false", 5) == 0) { *out = false; return true; }
+    return false;
+}
+
+guardx_err_t PARSE_SENSOR_JSON(const char *json, sensor_msg_t *out)
+{
+    if (json == NULL || out == NULL)
+        return GUARDX_ERR_INVALID;
+
+    memset(out, 0, sizeof(*out));
+
+    /* seq는 역추적용이라 필수 취급. values는 노드 구성에 따라 달라질
+     * 수 있다는 규약(4-1)에 맞춰, 개별 센서값 누락은 valid=false로
+     * 강등하고 파싱 자체는 성공시킨다. */
+    if (!get_u32(json, GUARDX_JSON_KEY_SEQ, &out->seq))
+        return GUARDX_ERR_INVALID;
+
+    if (!get_bool(json, "gas", &out->gas_valid))
+        out->gas_valid = false;
+    if (!get_bool(json, "temphum", &out->temphum_valid))
+        out->temphum_valid = false;
+    if (!get_bool(json, "spark", &out->spark_valid))
+        out->spark_valid = false;
+
+    if (!get_int(json, "gas_ppm", &out->gas_ppm))
+        out->gas_valid = false;
+    if (!get_double(json, "temperature", &out->temperature) ||
+        !get_double(json, "humidity", &out->humidity))
+        out->temphum_valid = false;
+    if (!get_int(json, "spark_detected", &out->spark_detected))
+        out->spark_valid = false;
+
+    return GUARDX_OK;
+}
+
+guardx_err_t PARSE_BUTTON_JSON(const char *json, button_msg_t *out)
+{
+    if (json == NULL || out == NULL)
+        return GUARDX_ERR_INVALID;
+
+    memset(out, 0, sizeof(*out));
+
+    if (!get_u32(json, GUARDX_JSON_KEY_SEQ, &out->seq))
+        return GUARDX_ERR_INVALID;
+    if (!get_u32(json, "press_count", &out->press_count))
+        return GUARDX_ERR_INVALID;
+
+    return GUARDX_OK;
+}

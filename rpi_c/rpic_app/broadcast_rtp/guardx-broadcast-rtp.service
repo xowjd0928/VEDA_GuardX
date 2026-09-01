@@ -1,0 +1,29 @@
+# GuardX RPi C 방송 수신 (Opus/RTP/UDP) systemd 유닛.
+#
+# 설치:
+#   sudo cp guardx-broadcast-rtp.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now guardx-broadcast-rtp
+#
+# ExecStart 경로는 실제 배치 위치에 맞게 수정할 것.
+[Unit]
+Description=GuardX RPi C broadcast receiver (Opus/RTP/UDP)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 실제 리포 위치에 맞게 경로 수정
+ExecStart=/home/dev/7th_VEDA_GROUP2/rpi_c/rpic_app/broadcast_rtp/receive.sh
+# 자동 재시작을 쓰지 않는다. 이 유닛의 수명은 audio_arbiter 가 쥔다 -
+# 방송 START 에 켜고 STOP·화재·KEEPALIVE 만료에 끈다. Restart=always 로 두면
+# 파이프라인이 어떤 이유로든 죽었을 때 systemd 가 2초 뒤 되살려 스피커를 다시
+# 뺏고, 그동안 화재 사이렌이 EBUSY 로 막힌다(조율기가 껐는데 되살아난다).
+# 파이프라인 실패는 READY 응답과 KEEPALIVE 만료로 드러난다.
+Restart=no
+# ALSA 접근을 위해 audio 그룹 사용자로
+User=dev
+SupplementaryGroups=audio
+
+[Install]
+WantedBy=multi-user.target

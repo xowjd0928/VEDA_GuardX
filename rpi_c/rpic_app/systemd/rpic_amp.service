@@ -1,0 +1,14 @@
+[Unit]
+Description=GuardX RPi C - rpic_amp kernel module (LM386 amp power/mute)
+# 컨벤션: 노드별 독립 유닛, Type=oneshot
+DefaultDependencies=no
+Before=rpic_subscriber.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/insmod /opt/guardx/rpic/drivers/rpic_amp.ko
+ExecStop=/sbin/rmmod rpic_amp
+
+[Install]
+WantedBy=multi-user.target

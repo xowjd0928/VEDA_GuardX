@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="300">
+<title>GuardX 예측 리포트</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --surface: #fcfcfb; --card: #ffffff; --line: #e6e8ec;
+    --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #8a897f;
+    --grid: #eceef1; --axis: #c9ccd2;
+    --occ: #2a78d6; --occ-fill: rgba(42,120,214,.10);
+    --act: #008300; --p5: #eb6834; --p60: #4a3aa7;
+    --tip-bg: #0b0b0b; --tip-ink: #fcfcfb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: #1a1a19; --card: #222221; --line: #33342f;
+      --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #85847b;
+      --grid: #2b2d30; --axis: #4a4c50;
+      --occ: #3987e5; --occ-fill: rgba(57,135,229,.16);
+      --p5: #d95926; --p60: #9085e9;
+      --tip-bg: #f2f2ef; --tip-ink: #1a1a19;
+    }
+  }
+  body { background: var(--surface); color: var(--ink);
+    font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+    margin: 0; padding: 28px 18px 48px; line-height: 1.5; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+  .eyebrow { font-size: 11px; letter-spacing: .14em; color: var(--ink-3); text-transform: uppercase; }
+  h1 { font-size: 24px; font-weight: 650; margin: 2px 0 2px; }
+  .asof { color: var(--ink-2); font-size: 13px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px 10px; }
+  .tile .k { font-size: 11px; letter-spacing: .1em; color: var(--ink-3); text-transform: uppercase; }
+  .tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .s { font-size: 12px; color: var(--ink-2); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px 16px 8px; position: relative; }
+  .card h2 { font-size: 15px; font-weight: 650; margin: 0 0 2px; }
+  .card .sub { font-size: 12.5px; color: var(--ink-2); margin: 0 0 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin: 2px 2px 8px; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .chartbox { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  .tip { position: absolute; pointer-events: none; display: none;
+    background: var(--tip-bg); color: var(--tip-ink); font-size: 12px; line-height: 1.45;
+    padding: 6px 9px; border-radius: 6px; white-space: nowrap;
+    transform: translate(-50%, -100%); z-index: 5; font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+  th, td { text-align: right; padding: 4px 16px 4px 0; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-3); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 400; }
+  td:first-child, th:first-child { text-align: left; }
+  .err { color: #c22; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">GuardX &middot; channel 1 &middot; hw_damped_v1 &middot; 자동 갱신 10분 (페이지 5분)</div>
+    <h1>예측 리포트 — 프로파일 · 실측 · 성적</h1>
+    <div class="asof" id="asof">데이터 로드 중…</div>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>학습된 하루 프로파일 vs 오늘 실측</h2>
+    <p class="sub">파랑 = 카메라 모델의 전형적 하루 (15분 × 96빈, KST). 초록 = 오늘 실측 (DB, 시간평균 점유 = 사람-프레임 ÷ 4,500). 실측은 현재 빈까지만.</p>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--occ)"></span>전형 (프로파일)</span>
+      <span><span class="sw" style="background:var(--act)"></span>오늘 실측</span>
+    </div>
+    <div class="chartbox" id="day-box"></div>
+  </div>
+
+  <div class="card">
+    <h2>예측 vs 실측 — 최근 24시간 (분 단위)</h2>
+    <p class="sub">각 분에 대해 "그 시각을 겨냥해 5분/60분 전에 기록된 예측"과 실측(0패딩 분 중앙값)의 대조. 예측값은 INT 반올림 저장(±0.5 양자화).</p>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--act)"></span>실측</span>
+      <span><span class="sw" style="background:var(--p5)"></span>5분 전 예측</span>
+      <span><span class="sw" style="background:var(--p60)"></span>60분 전 예측</span>
+    </div>
+    <div class="chartbox" id="ts-box"></div>
+  </div>
+
+  <div class="card">
+    <h2>실전 MAE (CSV 전 구간)</h2>
+    <table id="mae-table"></table>
+  </div>
+</div>
+
+<script>
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const NS = "http://www.w3.org/2000/svg";
+
+async function text(u) { const r = await fetch(u, {cache:"no-store"}); if (!r.ok) throw new Error(u); return r.text(); }
+async function json(u) { const r = await fetch(u, {cache:"no-store"}); if (!r.ok) throw new Error(u); return r.json(); }
+
+function lineChart(boxId, xTicks, seriesDefs, yMax, yTicks, yUnit, tipLabel) {
+  const box = document.getElementById(boxId);
+  box.innerHTML = "";
+  const W = 920, H = 250, L = 38, R = 12, T = 14, B = 26;
+  const pw = W - L - R, ph = H - T - B;
+  const N = seriesDefs[0].data.length;
+  const x = i => L + pw * i / Math.max(N - 1, 1);
+  const y = v => T + ph * (1 - Math.min(v, yMax) / yMax);
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  let g = "";
+  for (const tv of yTicks) {
+    g += `<line x1="${L}" x2="${W-R}" y1="${y(tv)}" y2="${y(tv)}" stroke="var(--grid)"/>`;
+    g += `<text x="${L-7}" y="${y(tv)+4}" text-anchor="end" font-size="11" fill="var(--ink-3)">${tv}</text>`;
+  }
+  for (const [i, label] of xTicks) {
+    g += `<line x1="${x(i)}" x2="${x(i)}" y1="${T+ph}" y2="${T+ph+4}" stroke="var(--axis)"/>`;
+    g += `<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--ink-3)">${label}</text>`;
+  }
+  g += `<line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="var(--axis)"/>`;
+  g += `<text x="${L-7}" y="${T-2}" text-anchor="end" font-size="10" fill="var(--ink-3)">${yUnit}</text>`;
+  for (const s of seriesDefs) {
+    const n = s.n ?? N;
+    const pts = s.data.slice(0, n).map((v,i) => v == null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+    if (s.fill) g += `<polygon points="${x(0)},${y(0)} ${pts.filter(Boolean).join(" ")} ${x(n-1)},${y(0)}" fill="${s.fill}"/>`;
+    // null(결측)은 선을 끊는다
+    let seg = [];
+    const flush = () => { if (seg.length > 1) g += `<polyline points="${seg.join(" ")}" fill="none" stroke="${s.color}" stroke-width="${s.w||2}" stroke-linejoin="round"/>`; seg = []; };
+    for (const p of pts) { if (p) seg.push(p); else flush(); }
+    flush();
+  }
+  g += `<line id="${boxId}-ch" y1="${T}" y2="${T+ph}" stroke="var(--axis)" stroke-dasharray="3 3" style="display:none"/>`;
+  svg.innerHTML = g;
+  box.appendChild(svg);
+  const tip = document.createElement("div"); tip.className = "tip"; box.appendChild(tip);
+  svg.addEventListener("pointermove", ev => {
+    const r = svg.getBoundingClientRect();
+    const ch = svg.querySelector(`#${boxId}-ch`);
+    let i = Math.round(((ev.clientX - r.left) * W / r.width - L) / pw * (N - 1));
+    if (i < 0 || i >= N) { tip.style.display = "none"; ch.style.display = "none"; return; }
+    ch.setAttribute("x1", x(i)); ch.setAttribute("x2", x(i)); ch.style.display = "";
+    tip.innerHTML = `<b>${tipLabel(i)}</b><br>` + seriesDefs.map(s => {
+      const v = i < (s.n ?? N) ? s.data[i] : null;
+      return `${s.name} ${v == null ? "—" : (+v).toFixed(2)}`;
+    }).join("<br>");
+    tip.style.display = "block";
+    tip.style.left = (x(i) * r.width / W) + "px";
+    const vis = seriesDefs.map(s => i < (s.n ?? N) ? s.data[i] : null).filter(v => v != null);
+    tip.style.top = (y(Math.max(...vis, 0)) * r.height / H - 8) + "px";
+  });
+  svg.addEventListener("pointerleave", () => {
+    tip.style.display = "none";
+    svg.querySelector(`#${boxId}-ch`).style.display = "none";
+  });
+}
+
+(async () => {
+  try {
+    const [pv, tb, prof, pred, gen] = await Promise.all([
+      text("data/pred_vs_actual.csv"), text("data/today_bins.csv"),
+      json("data/profile.json"), json("data/prediction_now.json"),
+      text("data/generated_at.txt")
+    ]);
+
+    // ── 타일
+    const m = pred.model || {};
+    document.getElementById("asof").textContent =
+      `데이터 생성 ${gen.trim()} (UTC) · 모델 관측 ${m.observations ?? "?"}분 · 페이지는 5분마다 자동 새로고침`;
+    const rows = [
+      ["프로파일", (m.profile_coverage_days ?? 0).toFixed(2) + "일", "warmup " + (m.warmup ? "중" : "해제")],
+      ["1-step MAE", (m.rolling_mae_1step ?? 0).toFixed(2) + "명", "카메라 자기진단"],
+      ["지금 인원", (pred.occupancy?.smoothed ?? 0) + "명", "smoothed"],
+      ["5분 뒤 p50", (pred.predictions?.[0]?.p50 ?? 0).toFixed(1) + "명",
+        "P90 " + (pred.predictions?.[0]?.p90 ?? 0).toFixed(1)],
+    ];
+    document.getElementById("tiles").innerHTML = rows.map(([k,v,s]) =>
+      `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
+
+    // ── 차트 1: 프로파일 vs 오늘 실측 (96빈)
+    const occ = prof.bins.map(b => b.occ_p50);
+    const act = new Array(96).fill(0);
+    for (const line of tb.trim().split("\n")) {
+      if (!line) continue;
+      const [bin, pf] = line.split(",");
+      act[+bin] = +pf / 4500;
+    }
+    // 현재 KST 빈 (generated_at 기준)
+    const now = new Date(gen.trim());
+    const kstMin = (now.getUTCHours() * 60 + now.getUTCMinutes() + 540) % 1440;
+    const actN = Math.floor(kstMin / 15) + 1;
+    const yMax1 = Math.max(2, Math.ceil(Math.max(...occ, ...act) + 0.5));
+    lineChart("day-box",
+      Array.from({length: 9}, (_, k) => [Math.min(k*12, 95), String(k*3).padStart(2,"0")+"시"]),
+      [{ name: "전형", data: occ, color: "var(--occ)", fill: "var(--occ-fill)" },
+       { name: "오늘 실측", data: act, color: "var(--act)", n: actN }],
+      yMax1, [0, Math.round(yMax1/2), yMax1], "명",
+      i => `${String(Math.floor(i/4)).padStart(2,"0")}:${String((i%4)*15).padStart(2,"0")} KST`);
+
+    // ── 차트 2: 예측 vs 실측 최근 24h (분 단위, 결측 분은 선 끊김)
+    const all = pv.trim().split("\n").filter(Boolean).map(l => {
+      const [em, a, p5, p30, p60, p180] = l.split(",");
+      return { em: +em, a: +a, p5: p5===""?null:+p5, p60: p60===""?null:+p60,
+               p30: p30===""?null:+p30, p180: p180===""?null:+p180 };
+    });
+    const tEnd = all.length ? all[all.length-1].em : 0;
+    const t0 = tEnd - 24*3600;
+    const win = all.filter(r => r.em > t0);
+    // 분 단위 연속 축 구성 (없는 분 = null → 선 끊김)
+    const nMin = 24*60;
+    const A = new Array(nMin).fill(null), P5 = new Array(nMin).fill(null), P60 = new Array(nMin).fill(null);
+    for (const r of win) {
+      const i = Math.round((r.em - t0) / 60) - 1;
+      if (i >= 0 && i < nMin) { A[i] = r.a; P5[i] = r.p5; P60[i] = r.p60; }
+    }
+    const kst = em => { const d = new Date((em)*1000);
+      return String((d.getUTCHours()+9)%24).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0"); };
+    const ticks2 = Array.from({length: 9}, (_, k) => [Math.min(k*180, nMin-1), kst(t0 + Math.min(k*180, nMin-1)*60 + 60)]);
+    const vals = win.flatMap(r => [r.a, r.p5??0, r.p60??0]);
+    const yMax2 = Math.max(2, Math.ceil(Math.max(...vals, 1) + 0.5));
+    lineChart("ts-box", ticks2,
+      [{ name: "실측", data: A, color: "var(--act)", w: 2 },
+       { name: "5분 전 예측", data: P5, color: "var(--p5)", w: 1.5 },
+       { name: "60분 전 예측", data: P60, color: "var(--p60)", w: 1.5 }],
+      yMax2, [0, Math.round(yMax2/2), yMax2], "명",
+      i => kst(t0 + (i+1)*60) + " KST");
+
+    // ── MAE 표 (CSV 전 구간, 클라이언트 계산)
+    const hs = [["p5",5],["p30",30],["p60",60],["p180",180]];
+    let html = "<tr><th>horizon</th><th>표본</th><th>MAE</th><th>bias</th><th>실측 평균</th></tr>";
+    for (const [k, h] of hs) {
+      const rs = all.filter(r => r[k] != null);
+      if (!rs.length) continue;
+      const mae = rs.reduce((s,r) => s + Math.abs(r[k]-r.a), 0) / rs.length;
+      const bias = rs.reduce((s,r) => s + (r[k]-r.a), 0) / rs.length;
+      const am = rs.reduce((s,r) => s + r.a, 0) / rs.length;
+      html += `<tr><td>${h}분</td><td>${rs.length}</td><td>${mae.toFixed(3)}</td><td>${bias>=0?"+":""}${bias.toFixed(3)}</td><td>${am.toFixed(3)}</td></tr>`;
+    }
+    document.getElementById("mae-table").innerHTML = html;
+  } catch (e) {
+    document.getElementById("asof").innerHTML =
+      `<span class="err">데이터 로드 실패: ${e.message} — gen_report.sh가 아직 안 돌았거나 서버 경로 확인</span>`;
+  }
+})();
+</script>
+</body>
+</html>

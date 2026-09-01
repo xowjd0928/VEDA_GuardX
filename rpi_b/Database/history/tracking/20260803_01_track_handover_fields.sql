@@ -1,0 +1,37 @@
+ALTER TABLE tracks
+ADD COLUMN IF NOT EXISTS display_id BIGINT,
+ADD COLUMN IF NOT EXISTS global_id BIGINT,
+ADD COLUMN IF NOT EXISTS camera_id INT,
+ADD COLUMN IF NOT EXISTS channel INT,
+ADD COLUMN IF NOT EXISTS state TEXT DEFAULT 'active',
+ADD COLUMN IF NOT EXISTS last_object_id INT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tracks_display_id
+ON tracks (display_id);
+
+ALTER TABLE detections
+ADD COLUMN IF NOT EXISTS display_id BIGINT,
+ADD COLUMN IF NOT EXISTS global_id BIGINT,
+ADD COLUMN IF NOT EXISTS raw_channel INT,
+ADD COLUMN IF NOT EXISTS state TEXT,
+ADD COLUMN IF NOT EXISTS direction TEXT,
+ADD COLUMN IF NOT EXISTS speed REAL,
+ADD COLUMN IF NOT EXISTS predicted_geom geometry(Point, 0),
+ADD COLUMN IF NOT EXISTS next_channel_hint INT,
+ADD COLUMN IF NOT EXISTS handover_ready BOOLEAN,
+ADD COLUMN IF NOT EXISTS prediction_confidence REAL;
+
+CREATE INDEX IF NOT EXISTS idx_detections_display_ts
+ON detections (display_id, ts);
+
+ALTER TABLE track_path
+ADD COLUMN IF NOT EXISTS display_id BIGINT,
+ADD COLUMN IF NOT EXISTS camera_id INT,
+ADD COLUMN IF NOT EXISTS channel INT,
+ADD COLUMN IF NOT EXISTS state TEXT,
+ADD COLUMN IF NOT EXISTS direction TEXT,
+ADD COLUMN IF NOT EXISTS speed REAL,
+ADD COLUMN IF NOT EXISTS predicted_geom geometry(Point, 0);
+
+CREATE INDEX IF NOT EXISTS idx_track_path_display_ts
+ON track_path (display_id, ts);

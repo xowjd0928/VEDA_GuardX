@@ -1,0 +1,13 @@
+[Unit]
+Description=GuardX RPi A - rpia_button kernel module (GPIO interrupt)
+DefaultDependencies=no
+Before=rpia_publisher.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/insmod /opt/guardx/rpia/drivers/rpia_button.ko
+ExecStop=/sbin/rmmod rpia_button
+
+[Install]
+WantedBy=multi-user.target

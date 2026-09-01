@@ -1,0 +1,22 @@
+# Qt Creator / CMake 빌드 산출물 (395MB — 커밋 금지)
+build/
+.qtcreator/
+
+# Qt Creator 사용자 설정
+*.user
+*.user.*
+
+# MSVC
+*.pdb
+*.ilk
+
+# 자격증명 — 정상 위치는 %LOCALAPPDATA%\GuardX\ 라 리포에 있을 일이 없지만,
+# 실수로 트리에 떨어뜨렸을 때 커밋되지 않게 하는 방어선. 설정법은
+# docs/SECURITY_SETUP.md 참조.
+credentials.ini
+*.pem
+*.key
+
+# 단, 신뢰 카메라 인증서는 **일부러** 커밋한다 — 공개 정보이고, 이게 리포에
+# 있어야 팀원이 지문을 손으로 옮겨 적지 않는다 (docs/SECURITY_SETUP.md §0).
+!certs/*.pem

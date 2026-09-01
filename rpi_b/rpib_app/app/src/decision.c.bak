@@ -1,0 +1,112 @@
+/*
+ * decision.c - 화재 판단 상태머신 구현
+ *
+ * 순수 로직만 있다 - MQTT도 DB도 시계도 모른다. 입력은 sensor_msg_t
+ * 하나, 출력은 이벤트 하나. 그래서 test/의 가짜 센서 주입만으로
+ * 전이 전체를 검증할 수 있다.
+ */
+
+#include <string.h>
+
+#include "decision.h"
+
+/* 지표별 연속 카운터. FIRE 상태에서는 의미가 반전된다
+ * (NORMAL: 연속 초과 횟수 / FIRE: recover_hits가 연속 정상 횟수) */
+static int gas_hits;
+static int temp_hits;
+static int spark_hits;
+static int recover_hits;
+
+static decision_state_t state = DECISION_STATE_NORMAL;
+static decision_cause_t last_cause = DECISION_CAUSE_NONE;
+static uint32_t last_trigger_seq;
+
+/* 지표 1개의 연속 카운터 갱신.
+ * valid=false -> 동결(현 값 유지), 초과 -> +1, 정상 -> 0 리셋 */
+static void update_hits(int *hits, bool valid, bool over)
+{
+    if (!valid)
+        return;
+    *hits = over ? (*hits + 1) : 0;
+}
+
+static decision_event_t feed_normal(const sensor_msg_t *msg)
+{
+    update_hits(&gas_hits,   msg->gas_valid,     msg->gas_ppm > THRESHOLD_GAS_PPM);
+    update_hits(&temp_hits,  msg->temphum_valid, msg->temperature > THRESHOLD_TEMP_C);
+    update_hits(&spark_hits, msg->spark_valid,   msg->spark_detected != 0);
+
+    /* 원인 판정 순서 = 확신도 순서: 불꽃(직접 증거) > 가스 > 온도.
+     * 동시에 확정되면 더 직접적인 증거를 원인으로 기록한다. */
+    if (spark_hits >= N_CONFIRM)
+        last_cause = DECISION_CAUSE_SPARK;
+    else if (gas_hits >= N_CONFIRM)
+        last_cause = DECISION_CAUSE_GAS;
+    else if (temp_hits >= N_CONFIRM)
+        last_cause = DECISION_CAUSE_TEMP;
+    else
+        return DECISION_EVENT_NONE;
+
+    state = DECISION_STATE_FIRE;
+    last_trigger_seq = msg->seq;
+    gas_hits = temp_hits = spark_hits = 0;
+    recover_hits = 0;
+    return DECISION_EVENT_FIRE;
+}
+
+static decision_event_t feed_fire(const sensor_msg_t *msg)
+{
+    /* 해제 조건: "모든" 지표가 유효하고 정상. 하나라도 invalid면
+     * 그 사이클은 해제 카운트에 넣지 않는다(동결) - 센서가 죽은
+     * 상태에서 소화를 멈추는 쪽이 더 위험하므로 보수적으로 간다. */
+    bool all_valid = msg->gas_valid && msg->temphum_valid && msg->spark_valid;
+    bool all_clear = msg->gas_ppm <= THRESHOLD_GAS_PPM &&
+                     msg->temperature <= THRESHOLD_TEMP_C &&
+                     msg->spark_detected == 0;
+
+    if (!all_valid)
+        return DECISION_EVENT_NONE;
+
+    recover_hits = all_clear ? (recover_hits + 1) : 0;
+
+    if (recover_hits < N_RECOVER)
+        return DECISION_EVENT_NONE;
+
+    state = DECISION_STATE_NORMAL;
+    recover_hits = 0;
+    return DECISION_EVENT_RECOVER;
+}
+
+decision_event_t DECISION_FEED(const sensor_msg_t *msg)
+{
+    if (msg == NULL)
+        return DECISION_EVENT_NONE;
+
+    return (state == DECISION_STATE_NORMAL) ? feed_normal(msg)
+                                            : feed_fire(msg);
+}
+
+decision_cause_t DECISION_LAST_CAUSE(void)
+{
+    return last_cause;
+}
+
+uint32_t DECISION_LAST_TRIGGER_SEQ(void)
+{
+    return last_trigger_seq;
+}
+
+const char *DECISION_CAUSE_STR(decision_cause_t c)
+{
+    switch (c) {
+    case DECISION_CAUSE_GAS:   return "gas";
+    case DECISION_CAUSE_TEMP:  return "temp";
+    case DECISION_CAUSE_SPARK: return "spark";
+    default:                   return "none";
+    }
+}
+
+decision_state_t DECISION_STATE(void)
+{
+    return state;
+}

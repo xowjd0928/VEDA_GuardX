@@ -1,0 +1,63 @@
+#!/bin/bash
+# 02_fake_rpia.sh - RPi A 역할을 흉내내 센서 데이터 발행 헬퍼
+# (프로토콜 규약 4-1/4-2 스키마, RPi A json_builder.c 출력과 동일 형태)
+#
+# 사용법:
+#   ./02_fake_rpia.sh normal [N]     # 정상값 N사이클 발행 (기본 1, 1Hz)
+#   ./02_fake_rpia.sh gas [N]        # 가스 초과(1500ppm) N사이클 (기본 3 = 화재 확정)
+#   ./02_fake_rpia.sh temp [N]       # 온도 초과(80.0도) N사이클
+#   ./02_fake_rpia.sh spark [N]      # 불꽃 감지 N사이클
+#   ./02_fake_rpia.sh invalid [N]    # 가스 valid=false N사이클 (동결 검증용)
+#   ./02_fake_rpia.sh button         # 비상 버튼 로그 1건 (QoS 2)
+#   ./02_fake_rpia.sh fire_demo      # 화재 확정 -> 해제까지 풀 시나리오
+set -e
+
+HOST="${MQTT_HOST:-localhost}"
+TOPIC_SENSOR="guardx/sensor/rpia"
+TOPIC_BUTTON="guardx/sensor/rpia/button"
+SEQ=$RANDOM
+
+now_ms() { date +%s%3N; }
+
+# sensor 1건 발행: gas temp hum spark gas_valid
+pub_sensor() {
+    local payload="{\"node_id\":\"rpia\",\"timestamp\":$(now_ms),\"seq\":$SEQ,\"values\":{\"gas_ppm\":$1,\"temperature\":$2,\"humidity\":$3,\"spark_detected\":$4},\"valid\":{\"gas\":$5,\"temphum\":true,\"spark\":true}}"
+    SEQ=$((SEQ + 1))
+    echo "PUB $payload"
+    mosquitto_pub -h "$HOST" -q 0 -t "$TOPIC_SENSOR" -m "$payload"
+}
+
+# N사이클 반복 (1Hz)
+cycles() {  # $1=횟수, 나머지=pub_sensor 인자
+    local n=$1; shift
+    for _ in $(seq "$n"); do
+        pub_sensor "$@"
+        sleep 1
+    done
+}
+
+case "$1" in
+normal)  cycles "${2:-1}"  320 23.5 60.2 0 true ;;
+gas)     cycles "${2:-3}" 1500 23.5 60.2 0 true ;;
+temp)    cycles "${2:-3}"  320 80.0 30.1 0 true ;;
+spark)   cycles "${2:-3}"  320 23.5 60.2 1 true ;;
+invalid) cycles "${2:-1}"    0 23.5 60.2 0 false ;;
+button)
+    payload="{\"node_id\":\"rpia\",\"timestamp\":$(now_ms),\"seq\":$SEQ,\"event\":\"emergency_button\",\"press_count\":1}"
+    echo "PUB $payload"
+    mosquitto_pub -h "$HOST" -q 2 -t "$TOPIC_BUTTON" -m "$payload"
+    ;;
+fire_demo)
+    echo "== 1) 정상 2사이클 (아무 일 없어야 함) =="
+    cycles 2 320 23.5 60.2 0 true
+    echo "== 2) 가스 초과 3사이클 (3번째에 FIRE 확정 + 명령 5건) =="
+    cycles 3 1500 23.5 60.2 0 true
+    echo "== 3) 화재 중 정상값 10사이클 (10번째에 RECOVER + 정지 3건) =="
+    cycles 10 320 23.5 60.2 0 true
+    echo "fire_demo 완료 - 엔진 stdout과 03_watch_rpic.sh 출력 확인"
+    ;;
+*)
+    grep '^#   ' "$0" | sed 's/^#   //'
+    exit 1
+    ;;
+esac

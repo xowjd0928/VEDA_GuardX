@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LED 매트릭스 UI 디자인 인계 문서</title>
+<style>
+:root{
+  --paper:#F4F6F8; --surface:#FFFFFF; --surface-2:#EDF1F4;
+  --ink:#131920; --ink-2:#4C5763; --ink-3:#7C8794;
+  --rule:#DCE2E8; --rule-2:#C3CCD5;
+  --accent:#0E7A88; --accent-soft:#E1EFF1; --hot:#BE4426;
+  --panel-bg:#0A0C0F;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#0D1116; --surface:#141A21; --surface-2:#1A222A;
+    --ink:#E6EBF1; --ink-2:#9AA6B2; --ink-3:#6B7785;
+    --rule:#242C35; --rule-2:#333D48;
+    --accent:#4CC0CE; --accent-soft:#0F2E33; --hot:#E0715A;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1116; --surface:#141A21; --surface-2:#1A222A;
+  --ink:#E6EBF1; --ink-2:#9AA6B2; --ink-3:#6B7785;
+  --rule:#242C35; --rule-2:#333D48;
+  --accent:#4CC0CE; --accent-soft:#0F2E33; --hot:#E0715A;
+}
+:root[data-theme="light"]{
+  --paper:#F4F6F8; --surface:#FFFFFF; --surface-2:#EDF1F4;
+  --ink:#131920; --ink-2:#4C5763; --ink-3:#7C8794;
+  --rule:#DCE2E8; --rule-2:#C3CCD5;
+  --accent:#0E7A88; --accent-soft:#E1EFF1; --hot:#BE4426;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  font-size:16px; line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:880px; margin:0 auto; padding:64px 24px 96px;}
+.mono{font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;}
+
+.eyebrow{
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--accent); margin:0 0 10px;
+}
+h1{
+  font-size:clamp(30px,5vw,42px); line-height:1.15; font-weight:600;
+  letter-spacing:-.025em; margin:0 0 16px; text-wrap:balance;
+}
+h2{
+  font-size:23px; font-weight:600; letter-spacing:-.018em;
+  margin:0 0 6px; text-wrap:balance;
+}
+h3{font-size:16.5px; font-weight:600; letter-spacing:-.008em; margin:0 0 8px;}
+p{margin:0 0 14px; max-width:68ch;}
+.lede{font-size:18px; color:var(--ink-2); max-width:62ch;}
+.meta{
+  display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:24px;
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:12.5px; color:var(--ink-3);
+}
+.meta b{color:var(--ink-2); font-weight:500;}
+
+section{margin-top:56px;}
+.shead{
+  display:flex; align-items:baseline; gap:14px;
+  border-top:1px solid var(--rule-2); padding-top:14px; margin-bottom:20px;
+}
+.snum{
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:12.5px; color:var(--ink-3); padding-top:5px; flex:none;
+}
+.sub{color:var(--ink-2); font-size:14.5px; margin:2px 0 0;}
+
+table{width:100%; border-collapse:collapse; font-size:14px; margin:0 0 8px;}
+th,td{text-align:left; padding:9px 12px 9px 0; border-bottom:1px solid var(--rule); vertical-align:top;}
+th{
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink-3); font-weight:500; border-bottom:1px solid var(--rule-2);
+}
+td.k{color:var(--ink-2); width:34%;}
+td.v{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:13px;}
+.scroll{overflow-x:auto;}
+
+.card{
+  background:var(--surface); border:1px solid var(--rule);
+  border-radius:12px; padding:18px;
+}
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;}
+.stack{display:grid; gap:14px;}
+
+.led{
+  background:var(--panel-bg); border-radius:8px; padding:10px;
+  border:1px solid var(--rule);
+}
+.led canvas{width:100%; display:block; image-rendering:pixelated;}
+.cap{
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:11.5px; color:var(--ink-3); margin:9px 0 0;
+}
+.cap b{color:var(--ink-2); font-weight:500;}
+
+.note{
+  border-left:2px solid var(--accent); background:var(--accent-soft);
+  padding:13px 16px; border-radius:0; margin:16px 0;
+  font-size:14.5px; color:var(--ink-2);
+}
+.note b{color:var(--ink);}
+.warn{border-left-color:var(--hot); background:transparent; border:1px solid var(--rule); border-left:2px solid var(--hot);}
+
+ul{margin:0 0 14px; padding-left:20px; max-width:68ch;}
+li{margin-bottom:7px;}
+li::marker{color:var(--ink-3);}
+code{
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:.88em; background:var(--surface-2); padding:1.5px 5px; border-radius:4px;
+}
+.swatches{display:grid; gap:4px;}
+.srow{display:grid; grid-template-columns:26px repeat(8,1fr); gap:4px; align-items:center;}
+.slab{
+  font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--ink-3);
+}
+.sw{height:26px; border-radius:3px; border:1px solid var(--rule);}
+.snums{display:grid; grid-template-columns:26px repeat(8,1fr); gap:4px; margin-top:2px;}
+.snums span{
+  font-family:ui-monospace,Menlo,monospace; font-size:10px;
+  color:var(--ink-3); text-align:center;
+}
+.tag{
+  display:inline-block; font-family:ui-monospace,Menlo,monospace;
+  font-size:11px; padding:2px 7px; border-radius:4px;
+  background:var(--surface-2); color:var(--ink-2); border:1px solid var(--rule);
+}
+.ok{color:var(--accent); border-color:var(--accent);}
+.no{color:var(--hot); border-color:var(--hot);}
+footer{margin-top:64px; padding-top:18px; border-top:1px solid var(--rule-2); color:var(--ink-3); font-size:13px;}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<p class="eyebrow">디자인 인계 문서</p>
+<h1>64×32 LED 매트릭스 UI</h1>
+<p class="lede">건물 축소 모형에 내장되는 HUB75 LED 패널의 화면 디자인. 일반 디스플레이와 제약이 크게 달라서, 작업 전 3번 항목을 먼저 읽어야 합니다.</p>
+<div class="meta">
+  <span><b>대상</b> 그래픽 디자이너</span>
+  <span><b>산출물</b> 64×32px PNG</span>
+  <span><b>현재 상태</b> 개발자 임시 디자인으로 동작 확인 완료</span>
+</div>
+
+<section>
+  <div class="shead">
+    <span class="snum">01</span>
+    <div><h2>무엇을 만드는가</h2>
+    <p class="sub">화면이 놓이는 맥락</p></div>
+  </div>
+  <p>건물을 1:20으로 축소한 스티로폼 모형 안에, 실물 크기의 LED 패널이 내벽에 부착됩니다. 이 패널이 건물 내부를 <b>2×2 구역(zone)</b>으로 나눠 각 구역의 온도와 습도를 실시간으로 보여줍니다.</p>
+  <p>즉 화면은 <b>건물 평면도이면서 동시에 계기판</b>입니다. 구조가 읽혀야 하고, 숫자도 읽혀야 합니다. 이 둘의 균형이 이번 디자인의 핵심 과제입니다.</p>
+  <div class="note">
+    패널 실물 크기는 <b>320×160mm</b>, 픽셀 피치 5mm입니다. 화면상 1px이 실제 5mm짜리 LED 알갱이 하나입니다. 5×7px 글자는 실물에서 <b>25×35mm</b>로, 몇 걸음 떨어져서도 읽힙니다. 작아 보여도 물리적으로는 충분히 큽니다.
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="snum">02</span>
+    <div><h2>하드웨어 사양</h2>
+    <p class="sub">참고용 — 디자인 판단에 직접 필요하진 않음</p></div>
+  </div>
+  <div class="scroll">
+  <table>
+    <tr><td class="k">패널</td><td class="v">SMG 풀컬러 P5 · 320×160mm · 피치 5mm</td></tr>
+    <tr><td class="k">해상도</td><td class="v">64 × 32 px (가로 2:1)</td></tr>
+    <tr><td class="k">인터페이스</td><td class="v">HUB75 · 1/16 스캔 · 5VDC</td></tr>
+    <tr><td class="k">제어 MCU</td><td class="v">STM32F401RE (Cortex-M4, 84MHz)</td></tr>
+    <tr><td class="k">프레임 갱신</td><td class="v">1초 주기 (조정 가능)</td></tr>
+    <tr><td class="k">리프레시</td><td class="v">약 16kHz · BCM 3비트 (가중치 4:2:1)</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="snum">03</span>
+    <div><h2>이 화면의 제약</h2>
+    <p class="sub">가장 중요한 항목 — 여기서 대부분의 디자인 판단이 갈립니다</p></div>
+  </div>
+
+  <h3>3.1 색은 채널당 8단계뿐입니다</h3>
+  <p>일반 화면은 채널당 256단계(1,600만 색)지만, 이 패널의 드라이버는 <b>채널당 3비트 = 8단계</b>만 표현합니다. 총 512색입니다. 아래가 실제로 쓸 수 있는 전부입니다.</p>
+  <div class="card">
+    <div class="swatches" id="swatches"></div>
+    <p class="cap"><b>중간값이 없습니다.</b> 두 단계 사이의 색은 존재하지 않아 가까운 쪽으로 튕깁니다. 미묘한 색 차이로 정보를 구분하는 설계는 이 화면에서 무너집니다.</p>
+  </div>
+  <div class="note warn">
+    <b>그라디언트는 쓸 수 없습니다.</b> 8단계로는 부드러운 전환이 안 나오고 굵은 띠(밴딩)로 갈라집니다. 넓은 면적의 그라디언트, 부드러운 그림자, 반투명 겹침은 모두 피해야 합니다.
+  </div>
+
+  <h3>3.2 안티앨리어싱이 없습니다</h3>
+  <p>픽셀은 켜지거나 꺼지거나 둘 중 하나입니다. 곡선과 사선은 계단으로 나타납니다. 1px보다 얇은 선, 소수점 좌표, 둥근 모서리 반경 같은 개념이 존재하지 않습니다. <b>모든 요소를 정수 픽셀 격자 위에서 설계해야 합니다.</b></p>
+
+  <h3>3.3 글자는 직접 찍어야 합니다</h3>
+  <p>기성 폰트를 축소해서 쓸 수 없습니다. 트루타입을 11px 이하로 줄여 1비트로 변환하면 획이 사라지거나 서로 붙어 뭉개집니다. 이 크기의 글자는 <b>픽셀을 하나씩 직접 배치한 비트맵</b>이어야 합니다.</p>
+  <p>개발 과정에서 실측한 숫자 가독성 한계입니다.</p>
+  <div class="card stack">
+    <div class="led"><canvas id="fontTest" width="512" height="256"></canvas></div>
+    <div class="scroll">
+    <table>
+      <tr><th>크기</th><th>판정</th><th>비고</th></tr>
+      <tr><td class="v">5×7 굵게</td><td><span class="tag ok">현재 사용</span></td><td>세로획 2px. 획 면적이 넓어 멀리서도 읽힘</td></tr>
+      <tr><td class="v">5×7 얇게</td><td><span class="tag">가능</span></td><td>획 1px. 또렷하지만 가늘어 보임</td></tr>
+      <tr><td class="v">3×5</td><td><span class="tag">하한선</td><td>숫자가 구분되는 최소 크기</td></tr>
+      <tr><td class="v">3×4</td><td><span class="tag no">불가</span></td><td>6·8·9가 같은 덩어리로 뭉침</td></tr>
+      <tr><td class="v">3×3</td><td><span class="tag no">불가</span></td><td>2·3·5 구분 불가, 8은 사각형 덩어리</td></tr>
+    </table>
+    </div>
+    <p class="cap">굵은 획을 쓰려면 세로획 2px + 간격 1px + 세로획 2px = <b>폭 최소 5px</b>이 필요합니다. 가로획까지 2px로 하는 완전 볼드는 <b>높이 8px</b>이 필요합니다.</p>
+  </div>
+
+  <h3>3.4 기하 제약</h3>
+  <p>2×2 구조를 1px 십자선 하나로 나누면 전체 폭이 항상 홀수가 됩니다(구역크기×2 + 3). 패널 폭은 64로 짝수라서 <b>좌우 여백이 1px 어긋나는 것을 피할 수 없습니다.</b> 완벽한 좌우 대칭을 전제로 설계하면 구현 단계에서 반드시 틀어집니다.</p>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="snum">04</span>
+    <div><h2>현재 구현 상태</h2>
+    <p class="sub">개발자가 임시로 만든 것 — 대체 대상이지 기준이 아닙니다</p></div>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="led"><canvas id="current" width="512" height="256"></canvas></div>
+      <p class="cap">실제 패널 픽셀을 1:1로 시뮬레이션한 화면입니다.</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <tr><th>요소</th><th>좌표</th></tr>
+        <tr><td class="k">전체</td><td class="v">64 × 32</td></tr>
+        <tr><td class="k">중앙 구조도</td><td class="v">29×29 · x 17–45 · y 1–29</td></tr>
+        <tr><td class="k">구역 1칸</td><td class="v">13 × 13</td></tr>
+        <tr><td class="k">십자 구분선</td><td class="v">x 31 · y 15 · 1px</td></tr>
+        <tr><td class="k">좌측 여백</td><td class="v">x 1–16 (16px)</td></tr>
+        <tr><td class="k">우측 여백</td><td class="v">x 46–62 (17px)</td></tr>
+        <tr><td class="k">글자</td><td class="v">5×7 굵게 · 자간 1px</td></tr>
+      </table>
+    </div>
+  </div>
+  <p style="margin-top:14px;">구역 색은 온도, 여백의 위 숫자는 온도(℃), 아래 숫자는 습도(%)입니다. 각 구역의 값이 가장 가까운 여백에 배치됩니다. 왼쪽 두 구역은 왼쪽 여백에, 오른쪽 두 구역은 오른쪽 여백에 표시됩니다.</p>
+  <div class="note">
+    이 배치는 <b>기술적으로 가능하다는 것만 검증한 상태</b>입니다. 여백 폭, 구역 크기, 색 배분, 숫자 위치 모두 재설계 대상입니다. 구조를 완전히 다르게 가도 됩니다.
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="snum">05</span>
+    <div><h2>디자인 요청 사항</h2>
+    <p class="sub">필요한 산출물</p></div>
+  </div>
+
+  <h3>5.1 필수 — 기본 화면</h3>
+  <p>4개 구역의 구조와 각 구역의 온도·습도를 한 화면에 담습니다. 표시해야 할 데이터는 구역당 온도 2자리, 습도 2자리입니다.</p>
+
+  <h3>5.2 필수 — 상태 변형</h3>
+  <div class="scroll">
+  <table>
+    <tr><th>상태</th><th>표현해야 할 것</th></tr>
+    <tr><td class="k">정상</td><td>기본 화면</td></tr>
+    <tr><td class="k">경보</td><td>특정 구역의 이상 상태. 한눈에 어느 구역인지 판별되어야 함</td></tr>
+    <tr><td class="k">센서 무응답</td><td>값을 못 읽는 구역. 0과 명확히 구분되어야 함</td></tr>
+  </table>
+  </div>
+  <p>점멸을 쓸 경우 주기를 명시해 주세요. 정지 화면 두 장(켜짐/꺼짐)으로 전달하면 됩니다.</p>
+
+  <h3>5.3 판단이 필요한 지점</h3>
+  <ul>
+    <li><b>구조 우선인가, 수치 우선인가.</b> 벽선을 밝게 하면 평면도로 읽히고, 구역 색을 밝게 하면 히트맵으로 읽힙니다. 둘 다 밝으면 서로 뭉개집니다. 명도 위계를 어디에 둘지 정해 주세요.</li>
+    <li><b>단위 표기.</b> 현재는 숫자만 있습니다. ℃와 %를 넣으려면 글자 폭이 늘어 다른 요소를 줄여야 합니다.</li>
+    <li><b>온도 색 매핑.</b> 몇 도가 어떤 색인지, 범위와 단계를 정해 주세요. 8단계 안에서 실제로 구분되는 색만 써야 합니다.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="snum">06</span>
+    <div><h2>전달 형식</h2>
+    <p class="sub">이대로 주시면 바로 코드로 옮길 수 있습니다</p></div>
+  </div>
+  <ul>
+    <li><b>PNG, 정확히 64×32px, 1:1.</b> 확대본은 참고용으로 따로 주셔도 되지만 원본은 반드시 실제 크기여야 합니다.</li>
+    <li><b>안티앨리어싱 끄기.</b> 포토샵은 연필 도구, 피그마는 확대 후 사각형 배치를 권합니다. 가장자리에 반투명 픽셀이 있으면 사용할 수 없습니다.</li>
+    <li><b>색은 8단계 값만.</b> 각 채널이 <code>0 · 36 · 73 · 109 · 146 · 182 · 219 · 255</code> 중 하나여야 합니다. 다른 값은 구현 시 반올림되어 의도와 달라집니다.</li>
+    <li><b>글자는 사용할 글리프를 모두 포함해 주세요.</b> 숫자 0–9는 필수이고, 문자나 기호를 쓰면 그것도 픽셀 단위로 그려 주셔야 합니다.</li>
+    <li><b>상태별로 파일을 나눠 주세요.</b> 레이어가 아니라 완성된 화면 단위로요.</li>
+  </ul>
+  <div class="note">
+    격자에 맞춰 작업할 수 있게 <b>64×32 템플릿 파일</b>이 필요하면 만들어 드립니다. 요청해 주세요.
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="snum">07</span>
+    <div><h2>향후 확장</h2>
+    <p class="sub">지금 만들 필요는 없지만 알고 계시면 좋은 방향</p></div>
+  </div>
+  <p>이 프로젝트의 원래 구상에는 화재 시 대피 안내가 포함되어 있습니다. 화재 구역 점멸, 출구 표시, 현재 위치, 대피 경로 화살표를 같은 64×32 화면에 띄우는 시나리오입니다.</p>
+  <p>지금 단계의 과제는 아니지만, <b>기본 화면 구조가 나중에 이 요소들을 수용할 수 있으면 좋습니다.</b> 특히 큰 방향 화살표가 들어갈 공간을 염두에 두시면 재설계를 줄일 수 있습니다.</p>
+</section>
+
+<footer>
+  질문이나 추가 자료 요청은 개발 담당자에게 전달해 주세요. 이 문서의 시뮬레이션 화면은 실제 패널의 픽셀 수와 색 단계를 그대로 반영합니다.
+</footer>
+</div>
+
+<script>
+(function(){
+  var lv = function(l){ return Math.round(l/7*255); };
+  var css = function(r,g,b){ return 'rgb('+lv(r)+','+lv(g)+','+lv(b)+')'; };
+
+  var sw = document.getElementById('swatches');
+  var rows = [['R',function(i){return [i,0,0];}],
+              ['G',function(i){return [0,i,0];}],
+              ['B',function(i){return [0,0,i];}],
+              ['W',function(i){return [i,i,i];}]];
+  rows.forEach(function(row){
+    var d = document.createElement('div');
+    d.className = 'srow';
+    var lab = document.createElement('span');
+    lab.className = 'slab'; lab.textContent = row[0];
+    d.appendChild(lab);
+    for(var i=0;i<8;i++){
+      var s = document.createElement('div');
+      s.className = 'sw';
+      var c = row[1](i);
+      s.style.background = css(c[0],c[1],c[2]);
+      d.appendChild(s);
+    }
+    sw.appendChild(d);
+  });
+  var nums = document.createElement('div');
+  nums.className = 'snums';
+  nums.appendChild(document.createElement('span'));
+  for(var i=0;i<8;i++){
+    var n = document.createElement('span');
+    n.textContent = lv(i);
+    nums.appendChild(n);
+  }
+  sw.appendChild(nums);
+
+  var BOLD={
+   '0':[0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E],'1':[0x06,0x0E,0x06,0x06,0x06,0x06,0x0F],
+   '2':[0x0E,0x1B,0x03,0x06,0x0C,0x18,0x1F],'3':[0x1F,0x03,0x0E,0x03,0x03,0x1B,0x0E],
+   '4':[0x03,0x07,0x0F,0x1B,0x1F,0x03,0x03],'5':[0x1F,0x18,0x1E,0x03,0x03,0x1B,0x0E],
+   '6':[0x06,0x0C,0x18,0x1E,0x1B,0x1B,0x0E],'7':[0x1F,0x03,0x03,0x06,0x06,0x0C,0x0C],
+   '8':[0x0E,0x1B,0x1B,0x0E,0x1B,0x1B,0x0E],'9':[0x0E,0x1B,0x1B,0x0F,0x03,0x06,0x0C]};
+  var THIN={
+   '0':[0x0E,0x11,0x13,0x15,0x19,0x11,0x0E],'1':[0x04,0x0C,0x04,0x04,0x04,0x04,0x0E],
+   '2':[0x0E,0x11,0x01,0x02,0x04,0x08,0x1F],'3':[0x1F,0x02,0x04,0x02,0x01,0x11,0x0E],
+   '4':[0x02,0x06,0x0A,0x12,0x1F,0x02,0x02],'5':[0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E],
+   '6':[0x06,0x08,0x10,0x1E,0x11,0x11,0x0E],'7':[0x1F,0x11,0x01,0x02,0x04,0x04,0x04],
+   '8':[0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E],'9':[0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C]};
+  var T5={
+   '0':[0x7,0x5,0x5,0x5,0x7],'1':[0x2,0x6,0x2,0x2,0x7],'2':[0x7,0x1,0x7,0x4,0x7],
+   '3':[0x7,0x1,0x7,0x1,0x7],'4':[0x5,0x5,0x7,0x1,0x1],'5':[0x7,0x4,0x7,0x1,0x7],
+   '6':[0x7,0x4,0x7,0x5,0x7],'7':[0x7,0x1,0x1,0x1,0x1],'8':[0x7,0x5,0x7,0x5,0x7],
+   '9':[0x7,0x5,0x7,0x1,0x7]};
+  var T4={
+   '0':[0x7,0x5,0x5,0x7],'1':[0x2,0x6,0x2,0x2],'2':[0x7,0x1,0x6,0x7],
+   '3':[0x7,0x3,0x1,0x7],'4':[0x5,0x7,0x1,0x1],'5':[0x7,0x6,0x1,0x7],
+   '6':[0x7,0x4,0x7,0x7],'7':[0x7,0x1,0x2,0x2],'8':[0x7,0x7,0x5,0x7],
+   '9':[0x7,0x5,0x7,0x1]};
+  var T3={
+   '0':[0x7,0x5,0x7],'1':[0x2,0x2,0x2],'2':[0x7,0x2,0x7],'3':[0x7,0x3,0x7],
+   '4':[0x5,0x7,0x1],'5':[0x7,0x6,0x7],'6':[0x4,0x7,0x7],'7':[0x7,0x1,0x1],
+   '8':[0x7,0x7,0x7],'9':[0x7,0x7,0x1]};
+
+  function mk(w,h){
+    var b=new Array(w*h); for(var i=0;i<w*h;i++) b[i]=null; return b;
+  }
+  function render(cv,w,h,buf){
+    var s=cv.width/w, c=cv.getContext('2d');
+    c.fillStyle='#0A0C0F'; c.fillRect(0,0,cv.width,cv.height);
+    for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+      c.fillStyle = buf[y*w+x] || '#15181D';
+      c.beginPath(); c.arc(x*s+s/2, y*s+s/2, s*0.37, 0, 7); c.fill();
+    }
+  }
+  function text(buf,W,font,fw,str,x,y,col){
+    for(var i=0;i<str.length;i++){
+      var g=font[str.charAt(i)]; if(!g) continue;
+      for(var r=0;r<g.length;r++) for(var c=0;c<fw;c++)
+        if((g[r]>>(fw-1-c))&1){
+          var px=x+i*(fw+1)+c, py=y+r;
+          if(px>=0&&py>=0&&px<W) buf[py*W+px]=col;
+        }
+    }
+  }
+
+  var fcv=document.getElementById('fontTest');
+  var FW=64, FH=32, fb=mk(FW,FH);
+  text(fb,FW,BOLD,5,'2455',1,1,css(7,7,7));
+  text(fb,FW,THIN,5,'2455',24,1,css(7,7,7));
+  text(fb,FW,T5,3,'2455',47,2,css(7,7,7));
+  text(fb,FW,T4,3,'2455',1,20,css(7,3,2));
+  text(fb,FW,T3,3,'2455',20,21,css(7,2,1));
+  text(fb,FW,T5,3,'68',40,20,css(4,4,5));
+  text(fb,FW,T4,3,'68',52,20,css(7,3,2));
+  render(fcv,FW,FH,fb);
+
+  var ccv=document.getElementById('current');
+  var b2=mk(64,32);
+  var CI=13, GX=17, GY=1, G=2*CI+3;
+  var T=[[24,55],[27,48],[22,61],[31,39]];
+  function heat(v){
+    if(v<50){var t=v/50; return [Math.round(t*5),Math.round(2+t),Math.round(5-t*5)];}
+    var u=(v-50)/50; return [Math.round(5+u*2),Math.round(3-u*3),0];
+  }
+  for(var i=0;i<4;i++){
+    var hv=Math.round((T[i][0]-18)/14*100), hc=heat(hv);
+    var zx=GX+1+(i%2)*(CI+1), zy=GY+1+(Math.floor(i/2))*(CI+1);
+    for(var a=0;a<CI;a++) for(var bb=0;bb<CI;bb++)
+      b2[(zy+bb)*64+(zx+a)]=css(hc[0],hc[1],hc[2]);
+  }
+  var wc=css(2,2,3);
+  for(var a=0;a<G;a++){
+    b2[GY*64+GX+a]=wc; b2[(GY+G-1)*64+GX+a]=wc;
+    b2[(GY+a)*64+GX]=wc; b2[(GY+a)*64+GX+G-1]=wc;
+    b2[(GY+a)*64+GX+CI+1]=wc; b2[(GY+CI+1)*64+GX+a]=wc;
+  }
+  for(var i=0;i<4;i++){
+    var side=i%2, row=Math.floor(i/2);
+    var tx=side===0?3:49, ty=row===0?1:16;
+    text(b2,64,BOLD,5,String(T[i][0]),tx,ty,css(7,7,7));
+    text(b2,64,BOLD,5,String(T[i][1]),tx,ty+8,css(2,3,4));
+  }
+  render(ccv,64,32,b2);
+})();
+</script>
+</body>
+</html>

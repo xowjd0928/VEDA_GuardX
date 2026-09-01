@@ -1,0 +1,48 @@
+/*
+ * rpia-adc-overlay.dts - GuardX RPi A MCP3008(rpia_adc) 디바이스 트리 오버레이
+ *
+ * spi0/CE0에 "guardx,rpia-adc" 노드를 선언해서, 부팅 시 커널이
+ * rpia_adc.ko의 probe()를 호출하도록 한다. 기본 spidev0(CS0)은
+ * 같은 CE0를 점유하므로 비활성화한다(spidev1/CS1은 그대로 둠).
+ *
+ * 컴파일 & 설치:
+ *   dtc -@ -I dts -O dtb -o rpia-adc.dtbo rpia-adc-overlay.dts
+ *   sudo cp rpia-adc.dtbo /boot/firmware/overlays/
+ *   # /boot/firmware/config.txt 에 아래 한 줄 추가 후 재부팅:
+ *   #   dtoverlay=rpia-adc
+ *
+ * 확인:
+ *   ls /dev/rpia_adc            # 노드 생성 확인
+ *   dmesg | grep rpia_adc       # probe 로그 확인
+ *   ls /dev/spidev0.0           # 없어야 정상 (CS0가 우리 드라이버로 넘어감)
+ */
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835";
+
+    /* 기본 spidev0 (CS0) 비활성화 - 우리 드라이버가 CE0를 쓰기 위함 */
+    fragment@0 {
+        target = <&spidev0>;
+        __overlay__ {
+            status = "disabled";
+        };
+    };
+
+    /* spi0 활성화 + MCP3008 노드 등록 (CE0) */
+    fragment@1 {
+        target = <&spi0>;
+        __overlay__ {
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "okay";
+
+            rpia_adc@0 {
+                compatible = "guardx,rpia-adc";
+                reg = <0>;                    /* CE0 */
+                spi-max-frequency = <1000000>;
+            };
+        };
+    };
+};

@@ -1,0 +1,18 @@
+[Unit]
+Description=GuardX RPi B - fire decision engine (App layer)
+# 같은 기기의 브로커가 먼저 뜨는 게 자연스럽지만 Requires는 걸지
+# 않는다 - 브로커가 늦어도 mosquitto_loop_start 재접속에 맡긴다
+# (A/C가 브로커 없이도 뜨는 것과 동일 정책)
+After=mosquitto.service network-online.target
+Wants=mosquitto.service network-online.target
+
+[Service]
+Type=simple
+# db_writer 스텁이 상대경로(rpib_events.jsonl)에 기록하므로 고정
+WorkingDirectory=/opt/guardx/rpib
+ExecStart=/opt/guardx/rpib/app/rpib_engine
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

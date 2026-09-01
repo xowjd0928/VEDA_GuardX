@@ -1,0 +1,11 @@
+{
+  "ivaArea":[
+    {"channel":1,"enable":true,"definedArea":[
+      {"index":1,"name":"door","objectTypeFilter":["Person"],
+       "areaCoordinates":[{"x":381,"y":585},{"x":645,"y":585},
+                          {"x":645,"y":1147},{"x":381,"y":1147}],
+       "detectionModes":["Entering","Exiting","Loitering","Intrusion"],
+       "intrusionDuration":2,"loiteringDuration":10,"appearanceDuration":10}]}]
+}
+
+

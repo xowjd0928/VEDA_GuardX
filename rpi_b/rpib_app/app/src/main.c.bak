@@ -1,0 +1,326 @@
+/*
+ * main.c - GuardX RPi B 판단 엔진(rpib_engine) 메인
+ *
+ * B는 "중계기"가 아니다. 두 독립 MQTT 구간의 접점이다:
+ *
+ *   [구간 1: A->B]  guardx/sensor/rpia  ─→ 여기서 소비되고 끝난다
+ *   [구간 2: B->C]  guardx/actuator/rpic ←─ 여기서 새로 만들어진다
+ *
+ * A의 메시지는 C로 전달되지 않는다. B가 센서 스냅샷을 먹고(decision),
+ * 화재가 확정되면 자기 명의(node_id=rpib, 자기 seq)로 명령을 새로
+ * 발행한다. 두 구간의 인과를 잇는 유일한 흔적이 명령 payload의
+ * reason/sensor_seq 필드다 (cmd_builder.h의 확장 제안 참조).
+ *
+ * 스레드 구조: 판단·발행·DB기록 전부 mosquitto 콜백 스레드에서
+ * 일어난다 (콜백 스레드는 하나라 자연 직렬화). main 스레드는
+ * 센서 침묵 감시(워치독)와 종료 대기만 한다. 콜백과 main이 공유하는
+ * 것은 last_sensor_ms 하나뿐이라 락 대신 단조시계 스냅샷으로 처리.
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+#include <poll.h>
+#include <time.h>
+#include <stdint.h>
+
+#include "sensor_parser.h"
+#include "decision.h"
+#include "cmd_builder.h"
+#include "db_writer.h"
+#include "mqtt_bus.h"
+#include "threshold_loader.h"
+
+/* 센서 침묵 경고 임계 (A는 1Hz 발행이므로 5초면 5사이클 유실) */
+#define SENSOR_SILENCE_WARN_MS 5000
+
+/* --- 화재 대응 시나리오 각도/듀티 (전부 잠정치) -----------------------
+ * !!! 미확정: 서보 각도는 기구(문 힌지/밸브 레버) 확정 후 실측.
+ * RPi C rpic_pca9685.h의 SAFE_ANGLE과 짝으로 정해야 한다 !!! */
+#define SCENARIO_VALVE_CLOSE_ANGLE 90   /* servo_1: 가스밸브 잠금 */
+#define SCENARIO_DOOR_OPEN_DIR      (-1)   /* 문(stepper) 개방 방향: +1=CW (리밋서 자동 정지) */
+#define SCENARIO_FAN_DUTY          100  /* 배연 최대 */
+#define SCENARIO_SOUND_FIRE         1   /* 화재 경보음 (sound value: 1=화재) */
+
+static volatile sig_atomic_t running = 1;
+
+/* 발행 seq (프로세스 시작 시 0, 재시작 리셋 허용 - 규약 3절) */
+static uint32_t pub_seq;
+
+/* 마지막 센서 수신 시각 (단조시계 ms). 콜백 스레드가 쓰고 main이
+ * 읽는다. 32bit OS에서는 64bit 읽기가 찢어질 수 있으나, 최악의
+ * 결과가 "워치독 경고 로그 1회 오발"이라 락을 생략한다 - 판단이나
+ * 명령 발행에는 영향 없음 */
+static volatile uint64_t last_sensor_ms;
+
+static void sig_handler(int sig)
+{
+    (void)sig;
+    running = 0;
+}
+
+/* epoch 기준 밀리초 (JSON timestamp 필드용, RPi A와 동일) */
+static uint64_t now_ms(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+/* 단조시계 밀리초 (워치독용 - 벽시계 조정에 흔들리면 안 됨) */
+static uint64_t mono_ms(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+/* ---------------------------------------------------------------------
+ * 명령 발행 헬퍼 - 시나리오는 명령 여러 건의 묶음이므로 한 건 실패가
+ * 나머지를 막지 않게 각각 발행하고 로그만 남긴다
+ * --------------------------------------------------------------------- */
+
+/* 발행에 성공한 것만 기록한다 - fire_event_command는 "B가 C로 실제로
+ * 내보낸 명령"의 감사 기록이므로, 발행 실패한 것을 남기면 사실과 다르다.
+ * 기록은 전이(db_write_transition)가 큐에 들어간 뒤에 이뤄져야 하며,
+ * 화재 시나리오가 항상 그 순서로 호출되므로 자연히 지켜진다. */
+static void pub_onoff(const char *command, const char *action,
+                      const char *reason, uint32_t sensor_seq)
+{
+    char json[GUARDX_JSON_MAX];
+    uint32_t seq = pub_seq++;
+    int len = CREATE_CMD_ONOFF_JSON(json, sizeof(json), command, action,
+                                    now_ms(), seq, reason, sensor_seq);
+
+    if (mqtt_bus_publish_actuator(json, len) == GUARDX_OK) {
+        printf("main: -> %s %s\n", command, action);
+        db_write_command(command, action, 0, false, seq, now_ms());
+    }
+}
+
+static void pub_set(const char *command, int value,
+                    const char *reason, uint32_t sensor_seq)
+{
+    char json[GUARDX_JSON_MAX];
+    uint32_t seq = pub_seq++;
+    int len = CREATE_CMD_SET_JSON(json, sizeof(json), command, value,
+                                  now_ms(), seq, reason, sensor_seq);
+
+    if (mqtt_bus_publish_actuator(json, len) == GUARDX_OK) {
+        printf("main: -> %s SET %d\n", command, value);
+        db_write_command(command, GUARDX_ACTION_SET, value, true, seq, now_ms());
+    }
+}
+
+/* 화재 확정 시나리오: 격리(밸브) -> 피난(문) -> 배연(팬) -> 소화(펌프)
+ * -> 경보(앰프) 순. QoS1이라 발행 순서가 곧 도착 순서 보장은 아니지만
+ * (재전송 시 역전 가능), 각 명령이 독립 멱등이라 순서 의존이 없도록
+ * 시나리오를 짰다 - "밸브가 잠기기 전에 펌프가 켜져도" 안전상 문제
+ * 없는 조합만 사용. */
+ *
+ * RPi C 매핑: 가스밸브=servo_1(각도), 문=stepper(연속 회전, 리밋센서서 자동
+ * 정지), 경보=sound(상황음, 1=화재). (구 servo_2 밸브 / amp 경보는 폐기) */
+static void fire_scenario(void)
+{
+    const char *cause = DECISION_CAUSE_STR(DECISION_LAST_CAUSE());
+    uint32_t sseq = DECISION_LAST_TRIGGER_SEQ();
+
+    printf("main: !!! FIRE CONFIRMED (cause=%s, sensor_seq=%u) !!!\n",
+           cause, sseq);
+
+    pub_set(GUARDX_CMD_SERVO_1, SCENARIO_VALVE_CLOSE_ANGLE, cause, sseq); /* 가스밸브 잠금 */
+    pub_set(GUARDX_CMD_STEPPER, SCENARIO_DOOR_OPEN_DIR,     cause, sseq); /* 문 개방(리밋서 정지) */
+    pub_set(GUARDX_CMD_FAN,     SCENARIO_FAN_DUTY,          cause, sseq); /* 배연 */
+    pub_onoff(GUARDX_CMD_WATER_PUMP, GUARDX_ACTION_ON,  cause, sseq);     /* 소화 */
+    pub_set(GUARDX_CMD_SOUND,   SCENARIO_SOUND_FIRE,       cause, sseq);  /* 화재 경보음 */
+}
+
+/* 상황 해제: 능동 대응(펌프/팬/경보)만 끈다. 밸브·문 서보는 되돌리지
+ * 않는다 - 가스 누출 후 밸브 재개방은 사람이 현장 확인 후 해야 할
+ * 일이지 센서 수치가 내려갔다고 자동으로 할 일이 아니다.
+ * !!! 미확정: 수동 복구 절차(별도 토픽? 물리 스위치?)는 팀 논의 필요 !!! */
+static void recover_scenario(void)
+{
+    printf("main: situation recovered - stopping active response\n");
+
+    pub_onoff(GUARDX_CMD_WATER_PUMP, GUARDX_ACTION_OFF, "recover", 0);
+    pub_set(GUARDX_CMD_FAN, 0, "recover", 0);
+    printf("main: (servo_1 valve / stepper door left as-is - manual reset required)\n");
+}
+
+/* ---------------------------------------------------------------------
+ * 수신 핸들러 (mosquitto 콜백 스레드)
+ * --------------------------------------------------------------------- */
+
+/* FIRE 중 센서 무효로 해제 판정이 멈춰 있는 상태를 밖에서 보이게 한다.
+ * decision.c는 시계도 로깅도 모르는 순수 로직이라 경고를 판정 안에서
+ * 찍지 않고 여기서 꺼내 쓴다 (워치독의 silence_warned와 같은 관용구).
+ * 각 경고는 동결 구간당 1회. 센서가 살아나면(freeze=0) 리셋된다. */
+static void check_freeze(void)
+{
+    static bool warned_stuck;
+    static bool warned_relax;
+    const fire_config_t *c = DECISION_GET_CONFIG();
+    int fz = DECISION_FREEZE_CYCLES();
+
+    if (fz == 0) {
+        warned_stuck = false;
+        warned_relax = false;
+        return;
+    }
+
+    /* 완화 임계를 이미 넘었으면 "동결됐다"고 찍지 않는다 - 그 시점엔
+     * 해제 판정이 재개된 상태라 사실과 다르다. relax를 작게 잡고
+     * 테스트할 때(fastfreeze) 이 조건이 실제로 갈린다. */
+    if (fz >= c->n_recover && fz < c->freeze_relax_cycles && !warned_stuck) {
+        fprintf(stderr, "main: WARNING - recovery frozen for %d cycles "
+                "(sensor invalid during FIRE), relax threshold at %d\n",
+                fz, c->freeze_relax_cycles);
+        warned_stuck = true;
+    }
+
+    if (fz >= c->freeze_relax_cycles && !warned_relax) {
+        fprintf(stderr, "main: freeze relax threshold reached (%d cycles) - "
+                "recovery resumes on surviving channels if their weight "
+                ">= %.2f\n", fz, c->min_valid_weight);
+        warned_relax = true;
+    }
+}
+
+static void on_sensor(const char *payload, int len)
+{
+    char buf[GUARDX_JSON_MAX];
+    sensor_msg_t msg;
+    decision_event_t ev;
+
+    if (len >= (int)sizeof(buf)) {
+        fprintf(stderr, "main: sensor payload too large (%d), dropped\n", len);
+        return;
+    }
+    memcpy(buf, payload, len);
+    buf[len] = '\0';
+
+    if (PARSE_SENSOR_JSON(buf, &msg) != GUARDX_OK) {
+        fprintf(stderr, "main: malformed sensor payload dropped: %s\n", buf);
+        return;
+    }
+
+    last_sensor_ms = mono_ms();
+
+    /* 판단을 먼저 하고 기록한다 - 종합 점수는 판단 후에야 존재하기
+     * 때문. 기록이 큐에 넣기만 하는 비동기라(PHASE 3) 이 순서 변경으로
+     * 판단이 늦어지지는 않는다. */
+    ev = DECISION_FEED(&msg);
+    db_write_sensor(&msg, now_ms(), DECISION_LAST_SCORE());
+    check_freeze();   /* NONE일 때가 곧 동결 구간이므로 early return보다 먼저 */
+    if (ev == DECISION_EVENT_NONE)
+        return;
+
+    db_write_transition(ev, DECISION_LAST_CAUSE(),
+                        DECISION_LAST_TRIGGER_SEQ(), now_ms());
+
+    if (ev == DECISION_EVENT_FIRE)
+        fire_scenario();
+    else
+        recover_scenario();
+}
+
+static void on_button(const char *payload, int len)
+{
+    char buf[GUARDX_JSON_MAX];
+    button_msg_t msg;
+
+    if (len >= (int)sizeof(buf))
+        return;
+    memcpy(buf, payload, len);
+    buf[len] = '\0';
+
+    if (PARSE_BUTTON_JSON(buf, &msg) != GUARDX_OK) {
+        fprintf(stderr, "main: malformed button payload dropped: %s\n", buf);
+        return;
+    }
+
+    /* 규약 4-2: 이 토픽은 로깅 전용. 실제 제어는 A->C 하드웨어
+     * 인터락이 이미 처리한 뒤다. 판단 로직에도 넣지 않는다. */
+    db_write_button(&msg, now_ms());
+    printf("main: emergency button logged (count=%u, sensor_seq=%u)\n",
+           msg.press_count, msg.seq);
+}
+
+/* PHASE 4: fire_threshold 갱신 신호. payload 내용은 안 본다 - 신호가
+ * 오면 무조건 DB에서 다시 읽는다(threshold_load_and_apply 참조).
+ * 실패해도 기존 설정을 유지하며 계속 동작한다. */
+static void on_config(const char *payload, int len)
+{
+    (void)payload;
+    (void)len;
+
+    printf("main: config reload signal received\n");
+    if (threshold_load_and_apply() != GUARDX_OK)
+        fprintf(stderr, "main: threshold reload failed, keeping current config\n");
+}
+
+int main(void)
+{
+    bool silence_warned = false;
+
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
+
+    /* 1) DB(스텁) 열기 - 기록 못 하는 채로 돌지 않도록 기동 실패 처리 */
+    if (db_writer_open() != GUARDX_OK) {
+        fprintf(stderr, "main: db open failed, aborting\n");
+        return 1;
+    }
+
+    /* 2) 화재 임계값 최초 적재. 실패해도 기동은 계속한다 - decision.c가
+     * 컴파일타임 폴백값(DEFAULT_*)으로 이미 초기화돼 있으므로, DB를
+     * 못 읽는다고 화재 감지 자체가 멈추면 안 된다는 판단(임계 잠정치로
+     * 라도 도는 게 안 도는 것보다 안전). MQTT 구독보다 먼저 해서, 첫
+     * 센서 메시지가 도착하기 전에 이미 최신 설정이 적용돼 있게 한다. */
+    if (threshold_load_and_apply() != GUARDX_OK)
+        fprintf(stderr, "main: threshold load failed, using compiled-in defaults\n");
+
+    /* 3) MQTT 연결 + 구독 */
+    if (mqtt_bus_init(on_sensor, on_button, on_config) != GUARDX_OK) {
+        fprintf(stderr, "main: mqtt init failed, aborting\n");
+        db_writer_close();
+        return 1;
+    }
+
+    last_sensor_ms = mono_ms();
+    {
+        const fire_config_t *c = DECISION_GET_CONFIG();
+
+        printf("main: rpib engine started (fuzzy fusion: score>=%.0f "
+               "OR spark>=%.0f&irtemp>=%.0f, confirm=%d cycles, "
+               "recover=%d cycles)\n",
+               c->fire_score_threshold, c->override_spark_score,
+               c->override_irtemp_score, c->n_confirm, c->n_recover);
+    }
+
+    /* main 스레드 = 워치독. A가 침묵하면 경고 (1회만, 복구 시 리셋).
+     * 침묵을 화재로 격상할지는 미확정이라 지금은 로그만 남긴다. */
+    while (running) {
+        poll(NULL, 0, 1000);
+
+        if (mono_ms() - last_sensor_ms > SENSOR_SILENCE_WARN_MS) {
+            if (!silence_warned) {
+                fprintf(stderr, "main: WARNING - no sensor data for %d ms "
+                        "(rpia down? network?)\n", SENSOR_SILENCE_WARN_MS);
+                silence_warned = true;
+            }
+        } else {
+            silence_warned = false;
+        }
+    }
+
+    printf("main: shutting down\n");
+    mqtt_bus_cleanup();   /* 콜백 스레드 먼저 정지 후 DB를 닫는다 */
+    db_writer_close();
+    return 0;
+}

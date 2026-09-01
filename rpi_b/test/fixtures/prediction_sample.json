@@ -1,0 +1,20 @@
+{
+  "zone": "channel_1",
+  "served_utc": "2026-07-20T01:18:35Z",
+  "occupancy": { "raw": 2, "smoothed": 2 },
+  "model": {
+    "version": "hw_damped_v1",
+    "selected_params": { "alpha": 0.60, "phi": 0.80 },
+    "rolling_mae_1step": 0.412,
+    "profile_coverage_days": 1.99,
+    "warmup": false,
+    "observations": 2880
+  },
+  "capacity_limit": 20,
+  "predictions": [
+    { "horizon_min": 5,   "p50": 0.74, "p10": 0.40, "p90": 1.04, "p_over_capacity": 0.000 },
+    { "horizon_min": 30,  "p50": 0.84, "p10": 0.00, "p90": 2.84, "p_over_capacity": -1.0 },
+    { "horizon_min": 60,  "p50": 0.92, "p10": 0.00, "p90": 2.92, "p_over_capacity": -1.0 },
+    { "horizon_min": 180, "p50": 1.09, "p10": 0.00, "p90": 3.09, "p_over_capacity": -1.0 }
+  ]
+}

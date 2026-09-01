@@ -1,0 +1,159 @@
+/*
+ * mqtt_bus.c - libmosquitto 기반 구독(센서) + 발행(액추에이터)
+ *
+ * QoS 정책 (프로토콜 규약 2-1):
+ *  - 센서 구독:      QoS 0 (유실 허용 - 1초 뒤 다음 값이 옴)
+ *  - 버튼 구독:      QoS 2 (로그 정확히 1회 - DB 중복 기록 금지)
+ *  - 액추에이터 발행: QoS 1 (멱등 명령 - 유실 불가, 중복 허용)
+ *
+ * 구독은 on_connect 안에서 수행 - 재접속 시 자동 재구독 (RPi C
+ * mqtt_sub.c와 동일 패턴).
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <mosquitto.h>
+
+#include "mqtt_bus.h"
+
+static struct mosquitto *mosq;
+static mqtt_sensor_handler_t sensor_handler;
+static mqtt_button_handler_t button_handler;
+
+/* guardx_protocol.h의 포맷 매크로 + 노드 ID로 조립한 토픽 (init 시 1회).
+ * 센서 토픽의 %s는 "발행자" 노드라 RPIA가 들어가는 점에 주의 -
+ * 구독자인 우리(rpib)의 ID가 아니다. */
+static char topic_sensor[128];
+static char topic_button[128];
+static char topic_actuator[128];
+
+static void on_connect(struct mosquitto *m, void *obj, int rc)
+{
+    (void)obj;
+
+    if (rc != 0) {
+        fprintf(stderr, "mqtt: connect refused (rc=%d)\n", rc);
+        return;
+    }
+
+    rc = mosquitto_subscribe(m, NULL, topic_sensor, GUARDX_QOS_SENSOR);
+    if (rc != MOSQ_ERR_SUCCESS)
+        fprintf(stderr, "mqtt: subscribe(%s) failed: %s\n",
+                topic_sensor, mosquitto_strerror(rc));
+
+    rc = mosquitto_subscribe(m, NULL, topic_button, GUARDX_QOS_BUTTON);
+    if (rc != MOSQ_ERR_SUCCESS)
+        fprintf(stderr, "mqtt: subscribe(%s) failed: %s\n",
+                topic_button, mosquitto_strerror(rc));
+
+    printf("mqtt: subscribed to %s (qos%d), %s (qos%d)\n",
+           topic_sensor, GUARDX_QOS_SENSOR,
+           topic_button, GUARDX_QOS_BUTTON);
+}
+
+static void on_message(struct mosquitto *m, void *obj,
+                       const struct mosquitto_message *msg)
+{
+    (void)m;
+    (void)obj;
+
+    if (msg->payloadlen <= 0)
+        return;
+
+    /* 토픽 완전 일치로 라우팅. button이 sensor의 하위 토픽이라
+     * 순서 주의 - 더 구체적인(긴) 쪽을 먼저 비교한다. */
+    if (strcmp(msg->topic, topic_button) == 0) {
+        if (button_handler)
+            button_handler((const char *)msg->payload, msg->payloadlen);
+    } else if (strcmp(msg->topic, topic_sensor) == 0) {
+        if (sensor_handler)
+            sensor_handler((const char *)msg->payload, msg->payloadlen);
+    }
+}
+
+guardx_err_t mqtt_bus_init(mqtt_sensor_handler_t on_sensor,
+                           mqtt_button_handler_t on_button)
+{
+    int rc;
+
+    if (on_sensor == NULL || on_button == NULL)
+        return GUARDX_ERR_INVALID;
+    sensor_handler = on_sensor;
+    button_handler = on_button;
+
+    snprintf(topic_sensor, sizeof(topic_sensor),
+             GUARDX_TOPIC_SENSOR_FMT, GUARDX_NODE_RPIA);
+    snprintf(topic_button, sizeof(topic_button),
+             GUARDX_TOPIC_BUTTON_FMT, GUARDX_NODE_RPIA);
+    snprintf(topic_actuator, sizeof(topic_actuator),
+             GUARDX_TOPIC_ACTUATOR_FMT, GUARDX_NODE_RPIC);
+
+    mosquitto_lib_init();
+
+    /* client id = 노드 ID (TLS 사용 시 인증서 CN과도 일치시킬 것) */
+    mosq = mosquitto_new(GUARDX_NODE_RPIB, true, NULL);
+    if (!mosq) {
+        fprintf(stderr, "mqtt: mosquitto_new failed\n");
+        return GUARDX_ERR_OPEN;
+    }
+
+    mosquitto_connect_callback_set(mosq, on_connect);
+    mosquitto_message_callback_set(mosq, on_message);
+
+#if MQTT_USE_TLS
+    /* [REAL DEPLOYMENT] mTLS 설정 (포트 8883, CN=rpib) */
+    rc = mosquitto_tls_set(mosq, MQTT_TLS_CA_PATH, NULL,
+                           MQTT_TLS_CERT_PATH, MQTT_TLS_KEY_PATH, NULL);
+    if (rc != MOSQ_ERR_SUCCESS) {
+        fprintf(stderr, "mqtt: tls_set failed: %s\n", mosquitto_strerror(rc));
+        mosquitto_destroy(mosq);
+        return GUARDX_ERR_OPEN;
+    }
+#endif
+
+    rc = mosquitto_connect(mosq, MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60);
+    if (rc != MOSQ_ERR_SUCCESS) {
+        fprintf(stderr, "mqtt: connect failed: %s\n", mosquitto_strerror(rc));
+        mosquitto_destroy(mosq);
+        return GUARDX_ERR_OPEN;
+    }
+
+    /* 재접속·keepalive·수신을 처리하는 내부 스레드 시작 */
+    rc = mosquitto_loop_start(mosq);
+    if (rc != MOSQ_ERR_SUCCESS) {
+        fprintf(stderr, "mqtt: loop_start failed: %s\n", mosquitto_strerror(rc));
+        mosquitto_disconnect(mosq);
+        mosquitto_destroy(mosq);
+        return GUARDX_ERR_OPEN;
+    }
+
+    printf("mqtt: connected to %s:%d (tls=%d)\n",
+           MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_USE_TLS);
+    return GUARDX_OK;
+}
+
+guardx_err_t mqtt_bus_publish_actuator(const char *json, int len)
+{
+    int rc = mosquitto_publish(mosq, NULL, topic_actuator, len, json,
+                               GUARDX_QOS_ACTUATOR, false);
+
+    if (rc != MOSQ_ERR_SUCCESS) {
+        fprintf(stderr, "mqtt: publish(%s, qos%d) failed: %s\n",
+                topic_actuator, GUARDX_QOS_ACTUATOR, mosquitto_strerror(rc));
+        return GUARDX_ERR_WRITE;
+    }
+    return GUARDX_OK;
+}
+
+void mqtt_bus_cleanup(void)
+{
+    if (mosq) {
+        mosquitto_disconnect(mosq);
+        mosquitto_loop_stop(mosq, false);
+        mosquitto_destroy(mosq);
+        mosq = NULL;
+    }
+    sensor_handler = NULL;
+    button_handler = NULL;
+    mosquitto_lib_cleanup();
+}

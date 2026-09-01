@@ -1,0 +1,16 @@
+{
+  "camera_id": 1, "served_utc": "2026-07-13T06:31:37Z", "config_version": 2, "count": 3,
+  "detections": [
+    {"channel":1,"object_id":401328,"category":1,"likelihood":0.85,
+     "rect_sx":199,"rect_sy":756,"rect_ex":385,"rect_ey":1380,"x":292,"y":1068,
+     "ts":"2026-07-13T06:31:25.086Z"},
+    {"channel":1,"object_id":401416,"category":1,"likelihood":0.78,
+     "rect_sx":1204,"rect_sy":501,"rect_ex":1409,"rect_ey":1010,"x":1306.5,"y":755.5,
+     "ts":"2026-07-13T06:31:25.284Z"},
+    {"channel":1,"object_id":401411,"category":1,"likelihood":0.79,
+     "rect_sx":0,"rect_sy":0,"rect_ex":0,"rect_ey":0,"x":0,"y":0,
+     "ts":"2026-07-13T06:31:26.687Z"}
+  ]
+}
+
+

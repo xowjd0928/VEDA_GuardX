@@ -1,0 +1,32 @@
+# --- 절대 커밋 금지: 인증서·개인키 ---
+# gen_certs.sh 산출물. ca.key가 유출되면 누구나 유효한 노드 인증서를
+# 발급할 수 있어 mTLS 전체가 무의미해진다.
+**/certs/out/
+*.key
+*.crt
+*.csr
+*.srl
+
+# --- 빌드 산출물 ---
+rpi_b/rpib_app/app/rpib_engine
+rpi_b/rpib_app/app/test_db_queue
+*.o
+*.ko
+
+# --- 런타임 데이터 ---
+rpi_b/rpib_app/app/rpib_events.jsonl*
+rpi_b/rpib_app/test/mosquitto_test.conf
+
+# STM32CubeIDE build outputs
+**/Debug/__pycache__/
+.claude/
+calib_work/
+
+# Jenkins / local CI outputs
+build/ci/
+artifacts/ci/
+__pycache__/
+*.pyc
+camera_app/*/app/build/
+*.cap
+*.o

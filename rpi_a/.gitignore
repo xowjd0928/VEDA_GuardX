@@ -1,0 +1,24 @@
+# 커널 모듈 빌드 산출물
+*.ko
+*.o
+*.o.*
+*.mod
+*.mod.c
+*.mod.o
+*.symvers
+*.order
+.*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+built-in.a
+
+# DT 오버레이 컴파일 산출물
+*.dtbo
+
+# App 바이너리
+rpia_app/app/rpia_publisher
+
+# DT 컴파일 / 임시 산출물
+*.dtb
+*~
